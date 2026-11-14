@@ -25,7 +25,7 @@ export const getCargoLabel = (cargo?: CargoObreiro): string => {
     case 'missionaria':
       return 'Missionária';
     case 'admin':
-      return 'Administrador Master';
+      return 'Administrador';
     default:
       return 'Obreiro(a)';
   }
@@ -99,22 +99,22 @@ export const getTipoAvisoLabel = (tipo: TipoAviso): string => {
     case 'visitante':
       return 'Visitante';
     case 'oracao':
-      return 'Pedido de Oração';
+      return 'Oração';
     case 'reuniao':
-      return 'Reunião & Grupo';
+      return 'Reunião';
     case 'geral':
-      return 'Comunicado Geral';
+      return 'Comunicado';
   }
 };
 
 export const getCategoriaOracaoLabel = (cat?: CategoriaOracao): string => {
   switch (cat) {
     case 'saude':
-      return 'Saúde & Tratamento';
+      return 'Saúde e Tratamento';
     case 'familia':
-      return 'Família & Lar';
+      return 'Família e Lar';
     case 'causas':
-      return 'Causas & Trabalho';
+      return 'Causas e Trabalho';
     case 'espiritual':
       return 'Vida Espiritual';
     case 'agradecimento':
@@ -135,15 +135,15 @@ export const getGrupoReuniaoLabel = (grupo?: GrupoReuniao): string => {
     case 'varoes':
       return 'Reunião de Varões';
     case 'jovens':
-      return 'Juventude & Mocidade (UMERP)';
+      return 'Juventude e Mocidade';
     case 'criancas':
-      return 'Ministério Infantil & EBD';
+      return 'Infantil e Escola Bíblica';
     case 'adolescentes':
       return 'Adolescentes';
     case 'ensaio':
-      return 'Ensaio de Louvor & Coral';
+      return 'Ensaio de Louvor e Coral';
     default:
-      return 'Reunião Eclesiástica';
+      return 'Reunião da Igreja';
   }
 };
 
@@ -170,6 +170,35 @@ export const formatHoraMinutosAtras = (isoDateString: string): string => {
     return `${diffHours}h atrás`;
   } catch {
     return '';
+  }
+};
+
+/**
+ * Retorna a data local no formato 'YYYY-MM-DD' sem deslocamento de fuso UTC
+ */
+export const getLocalIsoDate = (date = new Date()): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export const getVisitanteGeneroLabel = (
+  genero?: 'homem' | 'mulher' | 'casal' | 'crianca' | 'familia'
+): string => {
+  switch (genero) {
+    case 'homem':
+      return 'Irmão';
+    case 'mulher':
+      return 'Irmã';
+    case 'casal':
+      return 'Casal';
+    case 'familia':
+      return 'Família';
+    case 'crianca':
+      return 'Criança';
+    default:
+      return 'Visitante';
   }
 };
 

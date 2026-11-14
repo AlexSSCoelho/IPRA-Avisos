@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { CultoAtivo, Obreiro } from '../types';
 import { storageService } from '../services/storageService';
+import { getLocalIsoDate } from '../utils/formatters';
 import { useAuth } from './AuthContext';
 
 interface CultoContextType {
@@ -11,7 +12,7 @@ interface CultoContextType {
   dirigenteAtualNome: string;
   dirigenteAtualCargo: string;
   iniciarNovoCulto: (nomeCulto: string, dirigente: Obreiro, horario?: string) => { success: boolean; message?: string };
-  definirDirigente: (obreiro: Obreiro, adminPin?: string) => { success: boolean; message?: string };
+  definirDirigente: (obreiro: Obreiro, adminPin?: string, actingUser?: Obreiro) => { success: boolean; message?: string };
   finalizarCulto: () => { success: boolean; message?: string };
 }
 
@@ -65,7 +66,7 @@ export const CultoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const novoCulto: CultoAtivo = {
       id: `culto_${Date.now()}`,
-      data: new Date().toISOString().split('T')[0],
+      data: getLocalIsoDate(),
       nomeCulto: nomeCulto || 'Culto de Celebração',
       horarioInicio: horarioFinal,
       dirigenteId: dirigente.id,
@@ -80,7 +81,8 @@ export const CultoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const definirDirigente = (
     novoDirigente: Obreiro,
-    adminPin?: string
+    adminPin?: string,
+    actingUser?: Obreiro
   ): { success: boolean; message?: string } => {
     // Sem culto ativo, não há como trocar dirigente
     if (!cultoAtivo || cultoAtivo.status !== 'em_andamento') {
@@ -95,13 +97,13 @@ export const CultoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Se já é o dirigente atual e está apenas se identificando (sem troca real), permite
     const jaDirigente = cultoAtivo.dirigenteId === novoDirigente.id;
     if (jaDirigente) {
-      // Apenas identificação — sem alterar estado do culto
       return { success: true };
     }
 
     // Troca real de dirigente: admin pode fazer livremente;
-    // qualquer outro precisa fornecer PIN válido (string não-vazia)
-    if (!isAdmin) {
+    // qualquer outro precisa fornecer PIN administrativo válido
+    const hasAdminAuthority = isAdmin || actingUser?.isAdmin === true;
+    if (!hasAdminAuthority) {
       if (!adminPin || adminPin.trim().length === 0) {
         return { success: false, message: 'É necessário informar a senha administrativa para trocar o dirigente.' };
       }

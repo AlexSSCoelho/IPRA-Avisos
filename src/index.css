@@ -4,11 +4,12 @@
 
 @layer base {
   :root {
-    --font-scale: 1.15;
+    --font-scale: 1;
   }
 
+  /* Escala global real controlada por AccessibilityContext */
   html {
-    font-size: 16px;
+    font-size: calc(16px * var(--font-scale, 1));
     -webkit-tap-highlight-color: transparent;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -20,7 +21,7 @@
   }
 
   body {
-    @apply bg-slate-100 text-slate-800 antialiased font-sans;
+    @apply bg-[#F4F7FB] text-[#0D213A] antialiased font-sans;
     height: 100%;
     width: 100%;
     overflow: hidden;
@@ -36,19 +37,23 @@
     overflow: hidden;
   }
 
-  /* Dark mode / Pulpit Mode */
-  .dark body, body.dark {
-    @apply bg-black text-slate-100;
+  /* Modo Escuro / Púlpito com identidade azul-marinho profunda IPRB */
+  .dark body,
+  body.dark {
+    background-color: #040B16;
+    color: #F8FAFC;
   }
 
   * {
     box-sizing: border-box;
   }
 
-  /* Estilização suave para inputs e botões */
-  input, textarea, select {
+  /* Campos sempre selecionáveis e com mínimo 16px para evitar zoom automático no iOS/Android */
+  input,
+  textarea,
+  select {
     user-select: text;
-    font-size: 16px;
+    font-size: max(1rem, 16px);
   }
 }
 
@@ -62,24 +67,39 @@
 }
 
 /* Custom scrollbars */
+/* Ocultar barras de rolagem mantendo rolagem fluida em WebView/Android */
+html,
+body,
+main,
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+main::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar,
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  display: none;
+  width: 0;
+  height: 0;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.25);
+  background: rgba(3, 88, 158, 0.25);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.45);
+  background: rgba(3, 88, 158, 0.45);
 }
 
+/* Área de toque acessível generosa (mínimo 48px) */
 .touch-target {
-  min-height: 44px;
-  min-width: 44px;
+  min-height: 48px;
+  min-width: 48px;
 }
 
 /* Transições suaves */
@@ -104,4 +124,3 @@
     transition-duration: 0s !important;
   }
 }
-

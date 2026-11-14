@@ -1,10 +1,11 @@
 // Service Worker para IPRA Avisos - Cache Offline para Android
-const CACHE_NAME = 'ipra-avisos-v1';
+const CACHE_NAME = 'ipra-avisos-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/favicon.svg',
+  '/logo-ipra.png',
+  '/logo-ipra-emblem.png',
   '/icon-192.png',
   '/icon-512.png'
 ];

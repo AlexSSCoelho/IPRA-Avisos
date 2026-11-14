@@ -1,173 +1,171 @@
 import React, { useState } from 'react';
-import { Send, CheckCircle2, Tag, Calendar, Users } from 'lucide-react';
+import { Send, CheckCircle2, Megaphone, Calendar, Users, Cake } from 'lucide-react';
 import { useAvisos } from '../../context/AvisosContext';
+import { audioFeedback } from '../../services/audioService';
 
 const SUGESTOES_TITULO = [
-  'Santa Ceia do Senhor',
-  'Cantina da Juventude',
-  'Batismo nas Águas',
+  'Aniversário',
+  'Santa Ceia',
+  'Jejum da Igreja',
   'Vigília de Oração',
-  'Consagração & Jejum',
-  'Escala de Limpeza & Cantina',
-  'Outro Assunto',
-];
-
-const DESTINATARIOS = [
-  'Toda a Igreja',
-  'Liderança & Obreiros',
-  'Grupo de Varões',
-  'Círculo de Oração',
-  'Juventude & Mocidade',
-  'Famílias',
 ];
 
 export const FormAvisoGeral: React.FC = () => {
   const { adicionarAviso } = useAvisos();
 
-  const [titulo, setTitulo] = useState('Santa Ceia do Senhor');
-  const [tituloPersonalizado, setTituloPersonalizado] = useState('');
+  const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [dataEvento, setDataEvento] = useState('');
-  const [destinatario, setDestinatario] = useState('Toda a Igreja');
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [destinatario, setDestinatario] = useState('');
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!titulo.trim()) {
+      setFeedback({ type: 'error', msg: 'Digite o assunto do comunicado.' });
+      return;
+    }
 
-    const tituloFinal = titulo === 'Outro Assunto' ? tituloPersonalizado.trim() || 'Aviso da Igreja' : titulo;
-    if (!tituloFinal) return;
-
-    adicionarAviso({
+    const res = adicionarAviso({
       tipo: 'geral',
       geral: {
-        titulo: tituloFinal,
+        titulo: titulo.trim(),
         descricao: descricao.trim() || undefined,
         dataEvento: dataEvento.trim() || undefined,
-        destinatario: destinatario.trim() || 'Toda a Igreja',
+        destinatario: destinatario.trim() || undefined,
       },
     });
 
-    setShowSuccessToast(true);
-    setTimeout(() => setShowSuccessToast(false), 3000);
-
-    setDescricao('');
-    setTituloPersonalizado('');
+    if (res.success) {
+      audioFeedback.playSuccessSound();
+      setFeedback({ type: 'success', msg: 'Comunicado enviado.' });
+      setTitulo('');
+      setDescricao('');
+      setDataEvento('');
+      setDestinatario('');
+      setTimeout(() => setFeedback(null), 3500);
+    } else {
+      setFeedback({ type: 'error', msg: res.message || 'Erro ao enviar comunicado.' });
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200/80 dark:border-slate-800 space-y-4 w-full max-w-full overflow-hidden transition-surface">
-      
-      {/* Banner de Sucesso */}
-      {showSuccessToast && (
-        <div className="bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 px-3.5 py-2.5 rounded-xl flex items-center gap-2 animate-in fade-in zoom-in-95 duration-150 shadow-xs">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <span className="text-xs font-bold">
-            Comunicado transmitido ao Púlpito com sucesso!
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="flex items-center gap-1.5 text-sm font-extrabold text-[#062552] dark:text-white mb-1.5">
+          <Megaphone className="w-4 h-4 text-[#03589E] dark:text-[#60A5FA]" />
+          <span>
+            Assunto <span className="text-rose-600">*</span>
           </span>
+        </label>
+
+        <input
+          type="text"
+          required
+          value={titulo}
+          onChange={(e) => setTitulo(e.target.value)}
+          placeholder={
+            titulo.toLowerCase().includes('anivers')
+              ? 'Ex: Aniversário da Irmã Maria'
+              : 'Ex: Santa Ceia no domingo'
+          }
+          className="w-full px-4 py-3 text-base rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-[#040B16] focus:border-[#03589E] focus:outline-none"
+        />
+
+        <div className="flex flex-wrap gap-2 mt-2.5">
+          {SUGESTOES_TITULO.map((sugestao) => {
+            const isSelected = titulo === sugestao;
+            const isNiver = sugestao === 'Aniversário';
+            return (
+              <button
+                key={sugestao}
+                type="button"
+                onClick={() => setTitulo(isNiver ? 'Aniversário de ' : sugestao)}
+                className={`px-3 py-2 rounded-xl text-xs font-bold border-2 transition-all min-h-[38px] inline-flex items-center gap-1.5 ${
+                  isSelected || (isNiver && titulo.toLowerCase().includes('anivers'))
+                    ? isNiver
+                      ? 'bg-[#D97706] border-[#D97706] text-white'
+                      : 'bg-[#03589E] border-[#03589E] text-white'
+                    : isNiver
+                      ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-[#FCD34D]'
+                      : 'bg-[#F4F7FB] dark:bg-[#040B16] border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-slate-200'
+                }`}
+              >
+                {isNiver && <Cake className="w-3.5 h-3.5 shrink-0" />}
+                <span>{sugestao}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-extrabold text-[#062552] dark:text-white mb-1.5">
+          Detalhes <span className="font-normal text-slate-500 dark:text-slate-400">(opcional)</span>
+        </label>
+        <textarea
+          value={descricao}
+          onChange={(e) => setDescricao(e.target.value)}
+          placeholder="Informações adicionais"
+          rows={3}
+          className="w-full px-4 py-3 text-base rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-[#040B16] focus:border-[#03589E] focus:outline-none resize-none"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="flex items-center gap-1.5 text-sm font-bold text-[#062552] dark:text-slate-200 mb-1.5">
+            <Calendar className="w-4 h-4 text-[#03589E] dark:text-[#60A5FA]" />
+            <span>
+              Data e hora <span className="font-normal text-slate-500">(opcional)</span>
+            </span>
+          </label>
+          <input
+            type="text"
+            value={dataEvento}
+            onChange={(e) => setDataEvento(e.target.value)}
+            placeholder="Ex: Domingo às 19h"
+            className="w-full px-3.5 py-3 text-base rounded-xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-[#040B16] focus:border-[#03589E] focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="flex items-center gap-1.5 text-sm font-bold text-[#062552] dark:text-slate-200 mb-1.5">
+            <Users className="w-4 h-4 text-[#03589E] dark:text-[#60A5FA]" />
+            <span>
+              Público <span className="font-normal text-slate-500">(opcional)</span>
+            </span>
+          </label>
+          <input
+            type="text"
+            value={destinatario}
+            onChange={(e) => setDestinatario(e.target.value)}
+            placeholder="Ex: Toda a igreja"
+            className="w-full px-3.5 py-3 text-base rounded-xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-[#040B16] focus:border-[#03589E] focus:outline-none"
+          />
+        </div>
+      </div>
+
+      {feedback && (
+        <div
+          role="status"
+          className={`flex items-center gap-2.5 p-3.5 rounded-2xl text-sm font-bold border-2 ${
+            feedback.type === 'success'
+              ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-400 text-emerald-900 dark:text-emerald-200'
+              : 'bg-rose-50 dark:bg-rose-950/50 border-rose-400 text-rose-900 dark:text-rose-200'
+          }`}
+        >
+          <CheckCircle2 className="w-5 h-5 shrink-0" />
+          <span>{feedback.msg}</span>
         </div>
       )}
 
-      {/* 1. Assunto / Título do Aviso */}
-      <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
-          <Tag className="w-4 h-4 text-blue-500 dark:text-blue-400" />
-          <span>Assunto do Comunicado: <span className="text-rose-500">*</span></span>
-        </label>
-        <div className="flex flex-wrap gap-1.5 mb-1.5 no-swipe" data-no-swipe="true">
-          {SUGESTOES_TITULO.map((t) => {
-            const isSelected = titulo === t;
-            return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTitulo(t)}
-                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition-all ${
-                  isSelected
-                    ? 'bg-blue-600 border-blue-600 text-white shadow-xs font-bold'
-                    : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 hover:border-slate-300'
-                }`}
-              >
-                {t}
-              </button>
-            );
-          })}
-        </div>
-
-        {titulo === 'Outro Assunto' && (
-          <input
-            type="text"
-            required
-            value={tituloPersonalizado}
-            onChange={(e) => setTituloPersonalizado(e.target.value)}
-            placeholder="Digite o título do comunicado"
-            className="w-full px-3.5 py-3 text-sm sm:text-base rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white mt-2 focus:bg-white dark:focus:bg-slate-950 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all"
-          />
-        )}
-      </div>
-
-      {/* 2. Destinatário */}
-      <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
-          <Users className="w-4 h-4 text-blue-500 dark:text-blue-400" />
-          <span>Público / Destinatário:</span>
-        </label>
-        <div className="flex flex-wrap gap-1.5 no-swipe" data-no-swipe="true">
-          {DESTINATARIOS.map((d) => {
-            const isSelected = destinatario === d;
-            return (
-              <button
-                key={d}
-                type="button"
-                onClick={() => setDestinatario(d)}
-                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition-all ${
-                  isSelected
-                    ? 'bg-blue-600 border-blue-600 text-white shadow-xs font-bold'
-                    : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 hover:border-slate-300'
-                }`}
-              >
-                {d}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 3. Detalhes */}
-      <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-          Informações Detalhadas:
-        </label>
-        <textarea
-          rows={3}
-          value={descricao}
-          onChange={(e) => setDescricao(e.target.value)}
-          placeholder="Ex: Convidamos todos os irmãos para a cantina após o culto em prol das atividades da mocidade."
-          className="w-full px-3.5 py-3 text-sm sm:text-base rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-950 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all"
-        />
-      </div>
-
-      {/* 4. Data do Evento */}
-      <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
-          <Calendar className="w-4 h-4 text-blue-500 dark:text-blue-400" />
-          <span>Data de Realização / Validade (Opcional):</span>
-        </label>
-        <input
-          type="text"
-          value={dataEvento}
-          onChange={(e) => setDataEvento(e.target.value)}
-          placeholder="Ex: Próximo Domingo pela manhã"
-          className="w-full px-3.5 py-3 text-sm sm:text-base rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-950 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all"
-        />
-      </div>
-
-      {/* Botão de Envio */}
       <button
         type="submit"
-        className="w-full py-4 rounded-xl bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 active:scale-[0.99] text-white font-black text-sm sm:text-base shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 transition-all touch-target"
+        className="w-full py-4 px-5 bg-[#03589E] hover:bg-[#062552] active:scale-[0.99] text-white font-extrabold text-base rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 min-h-[54px]"
       >
-        <Send className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-        <span>Transmitir Comunicado Geral</span>
+        <Send className="w-5 h-5 shrink-0" />
+        <span>Enviar Comunicado</span>
       </button>
     </form>
   );

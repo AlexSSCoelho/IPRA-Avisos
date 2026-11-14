@@ -1,328 +1,422 @@
-import React, { useState } from 'react';
-import { 
-  Radio, 
-  Crown, 
-  CheckCircle2, 
-  CheckCheck,
-  Flag,
-  Maximize2,
-  Minimize2
-} from 'lucide-react';
-import { useCulto } from '../../context/CultoContext';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAvisos } from '../../context/AvisosContext';
+import { useCulto } from '../../context/CultoContext';
+import { useAuth } from '../../context/AuthContext';
 import { useAccessibility } from '../../context/AccessibilityContext';
 import { AvisoCardPulpito } from './AvisoCardPulpito';
 import { AdminPassModal } from '../auth/AdminPassModal';
-import { IniciarCultoModal } from '../culto/IniciarCultoModal';
+import { audioFeedback } from '../../services/audioService';
+import type { TipoAviso } from '../../types';
+import {
+  CheckCircle2,
+  ListChecks,
+  History,
+  Flag,
+  Maximize2,
+  Minimize2,
+  Crown,
+  Church,
+  AlertTriangle,
+  Lock,
+  UserPlus,
+  HeartHandshake,
+  Calendar,
+  Megaphone,
+  Layers,
+  MoreHorizontal,
+  Type,
+  X,
+} from 'lucide-react';
+
+type SubTabPulpito = 'pendentes' | 'anunciados';
+type FiltroCategoria = 'todos' | TipoAviso;
+
+const FILTROS_CATEGORIA: {
+  id: FiltroCategoria;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  { id: 'todos', label: 'Todos', icon: Layers },
+  { id: 'visitante', label: 'Visitantes', icon: UserPlus },
+  { id: 'oracao', label: 'Orações', icon: HeartHandshake },
+  { id: 'reuniao', label: 'Reuniões', icon: Calendar },
+  { id: 'geral', label: 'Comunicados', icon: Megaphone },
+];
 
 export const PulpitoScreen: React.FC = () => {
-  const { 
-    cultoAtivo, 
-    dirigenteAtualNome, 
-    finalizarCulto
-  } = useCulto();
-  const { 
-    avisosPendentes, 
-    avisosAnunciados, 
-    marcarComoAnunciado, 
+  const {
+    avisosPendentes,
+    avisosAnunciados,
+    isCultoEmAndamento,
+    marcarComoAnunciado,
     desmarcarComoAnunciado,
-    totalPendentes,
-    totalAnunciados
   } = useAvisos();
-  const { 
-    fontScale, 
-    increaseFontSize, 
-    decreaseFontSize, 
-    resetFontSize,
+  const { cultoAtivo, isDirigente, dirigenteAtualNome, finalizarCulto } = useCulto();
+  const { isAdmin } = useAuth();
+  const {
+    fontScale,
+    setFontScale,
     modoFocadoPulpito,
-    setModoFocadoPulpito
+    toggleModoFocadoPulpito,
+    soundEnabled,
   } = useAccessibility();
 
-  const [activeTab, setActiveTab] = useState<'pendentes' | 'anunciados'>('pendentes');
+  const [subTab, setSubTab] = useState<SubTabPulpito>('pendentes');
+  const [filtroCat, setFiltroCat] = useState<FiltroCategoria>('todos');
+  const [showMaisMenu, setShowMaisMenu] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
-  const [showIniciarCultoModal, setShowIniciarCultoModal] = useState(false);
-  const [showEncerrarConfirm, setShowEncerrarConfirm] = useState(false);
+  const [confirmEndCulto, setConfirmEndCulto] = useState(false);
+  const [erroCulto, setErroCulto] = useState<string | null>(null);
 
-  const listaAtual = activeTab === 'pendentes' ? avisosPendentes : avisosAnunciados;
+  const canManagePulpito = isDirigente || isAdmin;
+
+  // Toca som discreto quando chega um novo aviso pendente após a abertura da tela
+  const prevPendentesRef = useRef<number>(avisosPendentes.length);
+  useEffect(() => {
+    if (avisosPendentes.length > prevPendentesRef.current && soundEnabled) {
+      audioFeedback.playPulpitNotificationSound();
+    }
+    prevPendentesRef.current = avisosPendentes.length;
+  }, [avisosPendentes.length, soundEnabled]);
+
+  // Ordena pedidos de oração URGENTES no topo da lista pendente
+  const pendentesOrdenados = useMemo(() => {
+    const filtrados =
+      filtroCat === 'todos'
+        ? avisosPendentes
+        : avisosPendentes.filter((a) => a.tipo === filtroCat);
+
+    return [...filtrados].sort((a, b) => {
+      const aUrgente = a.tipo === 'oracao' && a.oracao?.urgente ? 1 : 0;
+      const bUrgente = b.tipo === 'oracao' && b.oracao?.urgente ? 1 : 0;
+      if (aUrgente !== bUrgente) return bUrgente - aUrgente;
+      return 0;
+    });
+  }, [avisosPendentes, filtroCat]);
+
+  const anunciadosFiltrados = useMemo(() => {
+    return filtroCat === 'todos'
+      ? avisosAnunciados
+      : avisosAnunciados.filter((a) => a.tipo === filtroCat);
+  }, [avisosAnunciados, filtroCat]);
+
+  const listaExibida = subTab === 'pendentes' ? pendentesOrdenados : anunciadosFiltrados;
+
+  const handleFinalizarCulto = () => {
+    setErroCulto(null);
+    const res = finalizarCulto();
+    if (!res.success) {
+      setErroCulto(res.message || 'Não foi possível encerrar o culto.');
+    } else {
+      setConfirmEndCulto(false);
+      setShowMaisMenu(false);
+    }
+  };
+
+  if (!isCultoEmAndamento) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-white dark:bg-[#081529] rounded-3xl border border-[#D5E2F0] dark:border-[#1C3559] p-8 text-center shadow-card">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#E8F2FC] dark:bg-[#0D1E38] flex items-center justify-center border border-[#D5E2F0] dark:border-[#1C3559]">
+            <Church className="w-8 h-8 text-[#03589E] dark:text-[#60A5FA]" />
+          </div>
+          <h2 className="text-lg font-extrabold text-[#062552] dark:text-white">
+            Nenhum culto aberto
+          </h2>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
+            Abra um culto na tela inicial para acompanhar os avisos.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const filtroAtualLabel = FILTROS_CATEGORIA.find((f) => f.id === filtroCat)?.label;
 
   return (
-    <div className={`w-full max-w-3xl mx-auto overflow-x-hidden ${modoFocadoPulpito ? 'px-2 sm:px-4 py-2 space-y-2.5' : 'px-3 py-3.5 space-y-3'}`}>
-      
-      {/* ── MODO FOCADO DO PÚLPITO: BARRA COMPACTA E IMERSIVA NO TOPO ── */}
-      {modoFocadoPulpito ? (
-        <div className="sticky top-0 z-30 bg-slate-950/95 backdrop-blur-md border border-amber-500/40 rounded-2xl p-2.5 shadow-lg shadow-black/40 flex items-center justify-between gap-2 animate-in fade-in duration-150">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-slate-950 shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-slate-950 animate-ping"></span>
-              PÚLPITO
-            </span>
-            <div className="min-w-0">
-              <div className="text-xs sm:text-sm font-black text-white truncate leading-tight">
-                {cultoAtivo?.status === 'em_andamento' ? dirigenteAtualNome : 'Púlpito'}
-              </div>
-              <div className="text-[10px] text-amber-400 font-medium truncate">
-                {cultoAtivo?.status === 'em_andamento' ? cultoAtivo.nomeCulto : 'Nenhum culto em andamento'}
-              </div>
+    <div className="space-y-3.5 pb-6">
+      {/* Barra Compacta — Lei de Hick: apenas 3 ações principais visíveis */}
+      <section className="bg-white dark:bg-[#081529] rounded-3xl border border-[#D5E2F0] dark:border-[#1C3559] p-3.5 sm:p-4 shadow-card space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <h2 className="text-base sm:text-lg font-extrabold text-[#062552] dark:text-white leading-snug">
+                {cultoAtivo?.nomeCulto}
+              </h2>
             </div>
+            <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mt-0.5">
+              Dirigente: <strong className="text-[#062552] dark:text-white">{dirigenteAtualNome}</strong>
+              {cultoAtivo?.horarioInicio ? ` • ${cultoAtivo.horarioInicio}` : ''}
+            </p>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* Controles rápidos de tamanho de fonte */}
-            <div className="flex items-center bg-slate-900 rounded-xl p-0.5 border border-slate-800">
-              <button
-                type="button"
-                onClick={decreaseFontSize}
-                className="w-7 h-7 rounded-lg text-slate-300 hover:text-white font-bold text-xs flex items-center justify-center touch-target active:scale-95"
-                title="Diminuir Letra"
-              >
-                A⁻
-              </button>
-              <button
-                type="button"
-                onClick={resetFontSize}
-                className="px-1.5 h-7 text-amber-400 font-bold text-xs flex items-center justify-center touch-target"
-                title="Redefinir Fonte"
-              >
-                {Math.round(fontScale * 100)}%
-              </button>
-              <button
-                type="button"
-                onClick={increaseFontSize}
-                className="w-7 h-7 rounded-lg text-slate-300 hover:text-white font-black text-xs flex items-center justify-center touch-target active:scale-95"
-                title="Aumentar Letra"
-              >
-                A⁺
-              </button>
-            </div>
-
-            {/* Botão evidente de saída do modo focado */}
+          {modoFocadoPulpito && (
             <button
               type="button"
-              onClick={() => setModoFocadoPulpito(false)}
-              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 border border-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-all touch-target"
-              title="Sair do Modo Focado (Esc)"
+              onClick={toggleModoFocadoPulpito}
+              className="px-3 py-1.5 rounded-xl bg-[#E85D04] text-white text-xs font-bold flex items-center gap-1 shrink-0"
             >
-              <Minimize2 className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Sair (Esc)</span>
-              <span className="sm:hidden">Sair</span>
+              <Minimize2 className="w-3.5 h-3.5" />
+              <span>Sair</span>
             </button>
-          </div>
+          )}
         </div>
-      ) : (
-        <>
-          {/* Barra Padrão do Púlpito com Identidade e Controles */}
-          <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-3.5 text-white shadow-sm flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 flex items-center justify-center font-bold text-amber-400 text-sm shrink-0 shadow-inner">
-                <Crown className="w-5 h-5" />
-              </div>
-              <div className="min-w-0">
-                <div className="font-black text-sm sm:text-base leading-tight text-white truncate">
-                  {cultoAtivo?.status === 'em_andamento' ? dirigenteAtualNome : 'Púlpito'}
-                </div>
-                <div className="text-xs text-amber-400/90 font-medium truncate mt-0.5">
-                  {cultoAtivo?.status === 'em_andamento' ? cultoAtivo.nomeCulto : 'Nenhum Culto em Andamento'}
-                </div>
-              </div>
-            </div>
 
-            {/* Controles de Tamanho da Letra */}
-            <div className="flex items-center gap-1 bg-slate-950/80 rounded-xl p-1 border border-slate-800 shrink-0">
-              <button
-                type="button"
-                onClick={decreaseFontSize}
-                className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs active:scale-95 flex items-center justify-center shadow-xs touch-target"
-                title="Diminuir Letra"
-              >
-                A⁻
-              </button>
-              <button
-                type="button"
-                onClick={resetFontSize}
-                className="px-2 h-8 text-amber-400 font-bold text-xs flex items-center justify-center touch-target"
-                title="Tamanho Normal"
-              >
-                {Math.round(fontScale * 100)}%
-              </button>
-              <button
-                type="button"
-                onClick={increaseFontSize}
-                className="w-8 h-8 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs active:scale-95 flex items-center justify-center shadow-xs touch-target"
-                title="Aumentar Letra"
-              >
-                A⁺
-              </button>
-            </div>
-          </div>
-
-          {/* Botão para Ativar o Modo Focado (Imersivo) */}
+        {/* 3 Ações Principais: Para Ler | Já Lidos | Mais */}
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-stretch gap-1.5">
           <button
             type="button"
-            onClick={() => setModoFocadoPulpito(true)}
-            className="w-full py-2.5 px-3.5 rounded-2xl bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/30 hover:border-amber-500/50 text-amber-900 dark:text-amber-200 text-xs sm:text-sm font-bold flex items-center justify-between transition-all touch-target shadow-xs"
+            onClick={() => setSubTab('pendentes')}
+            className={`min-w-0 py-2.5 px-2 sm:px-3 rounded-2xl font-extrabold text-xs sm:text-sm border-2 flex items-center justify-center gap-1.5 transition-all min-h-[46px] ${
+              subTab === 'pendentes'
+                ? 'bg-[#03589E] border-[#03589E] text-white shadow-sm'
+                : 'bg-[#F4F7FB] dark:bg-[#040B16] border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-slate-200'
+            }`}
           >
-            <div className="flex items-center gap-2">
-              <Maximize2 className="w-4 h-4 text-amber-500 shrink-0" />
-              <span>Entrar no Modo Focado do Púlpito</span>
-            </div>
-            <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 hidden sm:inline">
-              Ocultar menus e maximizar tela de leitura →
-            </span>
+            <ListChecks className="w-4 h-4 shrink-0 hidden sm:inline" />
+            <span className="whitespace-nowrap">Para Ler ({avisosPendentes.length})</span>
           </button>
-        </>
+
+          <button
+            type="button"
+            onClick={() => setSubTab('anunciados')}
+            className={`min-w-0 py-2.5 px-2 sm:px-3 rounded-2xl font-extrabold text-xs sm:text-sm border-2 flex items-center justify-center gap-1.5 transition-all min-h-[46px] ${
+              subTab === 'anunciados'
+                ? 'bg-emerald-700 border-emerald-700 text-white shadow-sm'
+                : 'bg-[#F4F7FB] dark:bg-[#040B16] border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-slate-200'
+            }`}
+          >
+            <History className="w-4 h-4 shrink-0 hidden sm:inline" />
+            <span className="whitespace-nowrap">Já Lidos ({avisosAnunciados.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowMaisMenu((p) => !p)}
+            aria-expanded={showMaisMenu}
+            className={`px-2.5 sm:px-3.5 py-2.5 rounded-2xl font-extrabold text-xs sm:text-sm border-2 flex items-center justify-center gap-1 transition-all min-h-[46px] shrink-0 ${
+              showMaisMenu
+                ? 'bg-[#062552] border-[#062552] text-white dark:bg-[#FBB016] dark:border-[#FBB016] dark:text-[#040B16]'
+                : 'bg-[#F4F7FB] dark:bg-[#040B16] border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-slate-200'
+            }`}
+          >
+            <MoreHorizontal className="w-4 h-4 shrink-0" />
+            <span>Mais</span>
+          </button>
+        </div>
+
+        {/* Chip discreto caso haja filtro ativo com o menu recolhido */}
+        {filtroCat !== 'todos' && !showMaisMenu && (
+          <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-[#E8F2FC] dark:bg-[#0D1E38] text-xs font-bold text-[#03589E] dark:text-sky-300">
+            <span>Mostrando: {filtroAtualLabel}</span>
+            <button
+              type="button"
+              onClick={() => setFiltroCat('todos')}
+              className="flex items-center gap-1 underline"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Limpar</span>
+            </button>
+          </div>
+        )}
+
+        {/* Menu Secundário Recolhido ("Mais") */}
+        {showMaisMenu && (
+          <div className="pt-3 border-t border-[#D5E2F0] dark:border-[#1C3559] space-y-3">
+            {/* Filtro por tipo */}
+            <div>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+                Filtrar por tipo
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {FILTROS_CATEGORIA.map((cat) => {
+                  const Icon = cat.icon;
+                  const active = filtroCat === cat.id;
+                  const baseList = subTab === 'pendentes' ? avisosPendentes : avisosAnunciados;
+                  const count =
+                    cat.id === 'todos'
+                      ? baseList.length
+                      : baseList.filter((a) => a.tipo === cat.id).length;
+
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setFiltroCat(cat.id)}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all min-h-[38px] ${
+                        active
+                          ? 'bg-[#03589E] border-[#03589E] text-white'
+                          : 'bg-[#F4F7FB] dark:bg-[#040B16] border-[#D5E2F0] dark:border-[#1C3559] text-[#0D213A] dark:text-slate-300'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{cat.label}</span>
+                      <span className="opacity-75">({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Letra (Padrão / Grande) */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-xs font-bold text-[#062552] dark:text-slate-200">
+                <Type className="w-4 h-4 text-[#03589E] dark:text-sky-400" />
+                <span>Tamanho da Letra</span>
+              </span>
+              <div className="flex items-center gap-1.5">
+                {[
+                  { scale: 1.0, label: 'Padrão' },
+                  { scale: 1.25, label: 'Grande' },
+                ].map((opt) => {
+                  const selected = Math.abs(fontScale - opt.scale) < 0.05;
+                  return (
+                    <button
+                      key={opt.scale}
+                      type="button"
+                      onClick={() => setFontScale(opt.scale)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all min-h-[36px] ${
+                        selected
+                          ? 'bg-[#03589E] border-[#03589E] text-white'
+                          : 'bg-[#F4F7FB] dark:bg-[#040B16] border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-slate-200'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Ações do Culto */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  toggleModoFocadoPulpito();
+                  setShowMaisMenu(false);
+                }}
+                className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 min-h-[44px] ${
+                  modoFocadoPulpito
+                    ? 'bg-[#E85D04] border-[#E85D04] text-white'
+                    : 'bg-[#F4F7FB] dark:bg-[#040B16] border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-white'
+                }`}
+              >
+                {modoFocadoPulpito ? (
+                  <Minimize2 className="w-4 h-4 shrink-0" />
+                ) : (
+                  <Maximize2 className="w-4 h-4 shrink-0" />
+                )}
+                <span>{modoFocadoPulpito ? 'Sair Tela Cheia' : 'Tela Cheia'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMaisMenu(false);
+                  setShowAdminModal(true);
+                }}
+                className="py-2.5 px-3 rounded-xl border border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#062552] dark:text-white font-bold text-xs flex items-center justify-center gap-1.5 min-h-[44px]"
+              >
+                <Crown className="w-4 h-4 text-[#E85D04] dark:text-[#FBB016] shrink-0" />
+                <span>Passar Direção</span>
+              </button>
+            </div>
+
+            {canManagePulpito && (
+              <div className="pt-1">
+                {!confirmEndCulto ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmEndCulto(true)}
+                    className="w-full py-2.5 px-4 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 min-h-[44px]"
+                  >
+                    <Flag className="w-4 h-4 shrink-0" />
+                    <span>Encerrar Culto</span>
+                  </button>
+                ) : (
+                  <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-700 space-y-2">
+                    <div className="flex items-center gap-2 text-rose-900 dark:text-rose-100 text-xs font-bold">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>
+                        {avisosPendentes.length > 0
+                          ? `Ainda há ${avisosPendentes.length} aviso(s) sem leitura. Encerrar?`
+                          : 'Encerrar o culto de hoje?'}
+                      </span>
+                    </div>
+                    {erroCulto && (
+                      <p className="text-xs font-bold text-rose-700 dark:text-rose-300">{erroCulto}</p>
+                    )}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmEndCulto(false)}
+                        className="py-2 rounded-xl bg-white dark:bg-[#081529] border border-[#D5E2F0] dark:border-[#1C3559] text-xs font-bold text-[#062552] dark:text-white"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleFinalizarCulto}
+                        className="py-2 rounded-xl bg-rose-600 text-white text-xs font-extrabold"
+                      >
+                        Encerrar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* Aviso discreto quando não é dirigente/admin */}
+      {!canManagePulpito && (
+        <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-[#E8F2FC] dark:bg-[#0D1E38] border border-[#03589E]/25 text-xs font-semibold text-[#062552] dark:text-slate-200">
+          <Lock className="w-4 h-4 shrink-0 text-[#03589E] dark:text-[#60A5FA]" />
+          <span>Modo somente leitura</span>
+        </div>
       )}
 
-      {/* Abas Rápidas: [ Para Ler (X) ] vs [ Já Lidos (Y) ] */}
-      <div className="grid grid-cols-2 gap-2 bg-slate-200/90 dark:bg-slate-900/90 p-1.5 rounded-2xl border border-slate-300/70 dark:border-slate-800 shadow-inner no-swipe" data-no-swipe="true">
-        <button
-          type="button"
-          onClick={() => setActiveTab('pendentes')}
-          className={`py-3 px-3 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all truncate touch-target ${
-            activeTab === 'pendentes'
-              ? 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 shadow-sm ring-1 ring-amber-500/40'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/40'
-          }`}
-        >
-          <Radio className="w-4 h-4 shrink-0 text-amber-500" />
-          <span className="truncate">Para Ler no Púlpito</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 shadow-xs ${
-            activeTab === 'pendentes' ? 'bg-amber-500 text-slate-950' : 'bg-slate-300 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-          }`}>
-            {totalPendentes}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('anunciados')}
-          className={`py-3 px-3 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all truncate touch-target ${
-            activeTab === 'anunciados'
-              ? 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 shadow-sm ring-1 ring-emerald-500/40'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/40'
-          }`}
-        >
-          <CheckCheck className="w-4 h-4 shrink-0 text-emerald-500" />
-          <span className="truncate">Já Lidos</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 shadow-xs ${
-            activeTab === 'anunciados' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-300 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-          }`}>
-            {totalAnunciados}
-          </span>
-        </button>
-      </div>
-
-      {/* Lista de Cards de Avisos */}
-      {listaAtual.length === 0 ? (
-        <div className="text-center py-12 px-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs space-y-3">
-          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center mx-auto shadow-inner">
-            <CheckCircle2 className="w-7 h-7" />
-          </div>
-          <div className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white">
-            {cultoAtivo?.status === 'em_andamento'
-              ? (activeTab === 'pendentes' ? 'Tudo lido! Nenhum aviso pendente' : 'Nenhum aviso anunciado nesta sessão')
-              : 'Nenhum culto em andamento'}
-          </div>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
-            {cultoAtivo?.status === 'em_andamento'
-              ? (activeTab === 'pendentes'
-                  ? 'Assim que os diáconos transmitirem novos avisos durante o culto, eles aparecerão aqui automaticamente.'
-                  : 'Os avisos já falados no púlpito ficam salvos aqui.')
-              : 'Inicie um culto para receber avisos em tempo real enviados pelos diáconos. Para consultar sessões anteriores, acesse a aba Histórico.'}
-          </p>
+      {/* Lista de Avisos */}
+      {listaExibida.length === 0 ? (
+        <div className="bg-white dark:bg-[#081529] rounded-3xl border border-[#D5E2F0] dark:border-[#1C3559] p-7 text-center shadow-card">
+          {subTab === 'pendentes' ? (
+            <div className="space-y-2">
+              <CheckCircle2 className="w-10 h-10 text-emerald-600 dark:text-emerald-400 mx-auto" />
+              <h3 className="text-base font-extrabold text-[#062552] dark:text-white">
+                {filtroCat === 'todos' ? 'Nenhum aviso na fila' : 'Nenhum aviso neste filtro'}
+              </h3>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <h3 className="text-base font-extrabold text-[#062552] dark:text-white">
+                Nenhum aviso lido ainda
+              </h3>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3.5">
-          {listaAtual.map((aviso) => (
+          {listaExibida.map((aviso) => (
             <AvisoCardPulpito
               key={aviso.id}
               aviso={aviso}
-              onMarcarLido={marcarComoAnunciado}
-              onDesmarcarLido={desmarcarComoAnunciado}
+              onMarcarAnunciado={marcarComoAnunciado}
+              onDesmarcarAnunciado={desmarcarComoAnunciado}
+              canManage={canManagePulpito}
             />
           ))}
         </div>
       )}
 
-      {/* Ação de Concluir Culto no Rodapé (apenas quando o culto estiver em andamento) */}
-      <div className="pt-2">
-        {modoFocadoPulpito && cultoAtivo?.status !== 'em_andamento' && (
-          <button
-            type="button"
-            onClick={() => setModoFocadoPulpito(false)}
-            className="w-full py-3 px-4 rounded-2xl border border-slate-700 bg-slate-900 text-slate-300 hover:text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all touch-target"
-          >
-            <Minimize2 className="w-4 h-4 text-amber-400" />
-            <span>Sair do Modo Focado</span>
-          </button>
-        )}
-
-        {cultoAtivo?.status === 'em_andamento' && !showEncerrarConfirm && (
-          <div className="flex flex-col sm:flex-row gap-2">
-            {modoFocadoPulpito && (
-              <button
-                type="button"
-                onClick={() => setModoFocadoPulpito(false)}
-                className="w-full py-3 px-4 rounded-2xl border border-slate-700 bg-slate-900 text-slate-300 hover:text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all touch-target"
-              >
-                <Minimize2 className="w-4 h-4 text-amber-400" />
-                <span>Sair do Modo Focado</span>
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setShowEncerrarConfirm(true)}
-              className="w-full py-3 px-4 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:border-rose-300 dark:hover:border-rose-800 text-slate-600 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-xs touch-target"
-            >
-              <Flag className="w-4 h-4 text-slate-400 hover:text-rose-500" />
-              <span>Concluir Culto de Hoje</span>
-            </button>
-          </div>
-        )}
-
-        {cultoAtivo?.status === 'em_andamento' && showEncerrarConfirm && (
-          <div className="bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-2xl p-4 space-y-3 shadow-xs animate-in fade-in">
-            <div className="text-xs sm:text-sm text-rose-900 dark:text-rose-200 font-bold text-center">
-              Deseja realmente concluir a transmissão deste culto?
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowEncerrarConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 text-xs sm:text-sm font-bold touch-target"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  finalizarCulto();
-                  setShowEncerrarConfirm(false);
-                  if (modoFocadoPulpito) setModoFocadoPulpito(false);
-                }}
-                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-black shadow-md shadow-rose-600/20 touch-target"
-              >
-                Sim, Concluir Culto
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Modais */}
-      {showAdminModal && (
-        <AdminPassModal 
-          isOpen={showAdminModal} 
-          onClose={() => setShowAdminModal(false)} 
-          actionType="trocar_dirigente"
-        />
-      )}
-
-      {showIniciarCultoModal && (
-        <IniciarCultoModal 
-          isOpen={showIniciarCultoModal} 
-          onClose={() => setShowIniciarCultoModal(false)} 
-        />
-      )}
+      <AdminPassModal
+        isOpen={showAdminModal}
+        onClose={() => setShowAdminModal(false)}
+        actionType="trocar_dirigente"
+      />
     </div>
   );
 };

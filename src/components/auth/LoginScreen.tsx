@@ -1,230 +1,375 @@
 import React, { useState } from 'react';
-import { 
-  Church, 
-  ArrowRight, 
+import {
   KeyRound,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  Crown,
   Check,
-  Crown
+  User,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCulto } from '../../context/CultoContext';
+import { useAvisos } from '../../context/AvisosContext';
 import type { Obreiro } from '../../types';
 import { getCargoLabel } from '../../utils/formatters';
 
 interface LoginScreenProps {
-  onSuccess: (isDirigente?: boolean, obreiro?: Obreiro) => void;
+  onSuccess?: (isDirigenteNoCulto: boolean, obreiro: Obreiro) => void;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onSuccess }) => {
-  const { obreiros, login, verifyObreiroPin } = useAuth();
-  const { cultoAtivo, definirDirigente } = useCulto();
+const normalizeText = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
 
-  const [selectedObreiro, setSelectedObreiro] = useState<Obreiro | null>(obreiros[0] || null);
-  const [isDirigindoCulto, setIsDirigindoCulto] = useState(false);
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onSuccess }) => {
+  const { obreiros, savedLoginUser, login, clearSavedLogin, verifyObreiroPin, verifyAdminPin } =
+    useAuth();
+  const { cultoAtivo, definirDirigente } = useCulto();
+  const { isCultoEmAndamento } = useAvisos();
+
+  const [nomeInput, setNomeInput] = useState('');
   const [pin, setPin] = useState('');
+  const [showPin, setShowPin] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(false);
+  const [isDirigindoCulto, setIsDirigindoCulto] = useState(false);
+  const [adminOverridePin, setAdminOverridePin] = useState('');
+  const [needsAdminOverride, setNeedsAdminOverride] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const isSelectedAlreadyDirigente = Boolean(
-    selectedObreiro &&
-      cultoAtivo &&
-      cultoAtivo.status === 'em_andamento' &&
-      cultoAtivo.dirigenteId === selectedObreiro.id
-  );
+  const cultoEmAndamento = isCultoEmAndamento;
+
+  const resolveObreiroPorNome = (rawName: string): { obreiro?: Obreiro; erro?: string } => {
+    const query = normalizeText(rawName);
+    if (!query) {
+      return { erro: 'Digite seu nome.' };
+    }
+
+    const ativos = obreiros.filter((o) => o.ativo !== false);
+
+    // 1. Nome completo exato
+    const exactMatch = ativos.find((o) => normalizeText(o.nome) === query);
+    if (exactMatch) return { obreiro: exactMatch };
+
+    // 2. Primeiro nome exato (se único)
+    const firstMatches = ativos.filter((o) => normalizeText(o.nome).split(' ')[0] === query);
+    if (firstMatches.length === 1) return { obreiro: firstMatches[0] };
+    if (firstMatches.length > 1) {
+      return { erro: 'Há mais de um obreiro com esse nome. Digite seu nome completo.' };
+    }
+
+    // 3. Correspondência parcial única
+    const partialMatches = ativos.filter((o) => normalizeText(o.nome).includes(query));
+    if (partialMatches.length === 1) return { obreiro: partialMatches[0] };
+    if (partialMatches.length > 1) {
+      return { erro: 'Mais de um nome encontrado. Digite seu nome e sobrenome.' };
+    }
+
+    return { erro: 'Nome não encontrado. Confira a grafia e tente novamente.' };
+  };
+
+  const concluirEntrada = (obreiro: Obreiro, salvarAcesso: boolean) => {
+    if (cultoEmAndamento && isDirigindoCulto) {
+      const jaTemDirigente =
+        cultoAtivo?.dirigenteId && cultoAtivo.dirigenteId !== obreiro.id;
+
+      if (jaTemDirigente && !obreiro.isAdmin) {
+        if (!needsAdminOverride || !adminOverridePin) {
+          setNeedsAdminOverride(true);
+          setErrorMsg('Informe a senha administrativa para assumir a direção.');
+          return;
+        }
+        if (!verifyAdminPin(adminOverridePin)) {
+          setErrorMsg('Senha administrativa incorreta.');
+          return;
+        }
+      }
+
+      const resDirigente = definirDirigente(
+        obreiro,
+        adminOverridePin || undefined,
+        obreiro
+      );
+      if (!resDirigente.success) {
+        setErrorMsg(resDirigente.message || 'Não foi possível assumir a direção.');
+        return;
+      }
+
+      login(obreiro, salvarAcesso);
+      onSuccess?.(true, obreiro);
+      return;
+    }
+
+    login(obreiro, salvarAcesso);
+    onSuccess?.(false, obreiro);
+  };
 
   const handleEntrar = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
-    if (!selectedObreiro) {
-      setErrorMsg('Selecione seu nome na lista para prosseguir.');
+    const { obreiro, erro } = resolveObreiroPorNome(nomeInput);
+    if (!obreiro) {
+      setErrorMsg(erro || 'Nome inválido.');
       return;
     }
 
-    if (!pin || pin.trim().length === 0) {
-      setErrorMsg('Informe sua senha para entrar (senha padrão: 1234).');
+    if (!pin.trim()) {
+      setErrorMsg('Digite sua senha.');
       return;
     }
 
-    const isValidPin = verifyObreiroPin(selectedObreiro.id, pin);
-    if (!isValidPin) {
-      setErrorMsg('Senha incorreta. Se ainda não alterou sua senha, utilize a senha padrão 1234.');
+    if (!verifyObreiroPin(obreiro.id, pin)) {
+      setErrorMsg('Senha incorreta.');
       return;
     }
 
-    const isAlreadyDirigente = Boolean(
-      cultoAtivo &&
-        cultoAtivo.status === 'em_andamento' &&
-        cultoAtivo.dirigenteId === selectedObreiro.id
-    );
-
-    if (isDirigindoCulto && !isAlreadyDirigente) {
-      const result = definirDirigente(selectedObreiro, pin);
-      if (!result.success) {
-        setErrorMsg(result.message || 'Não foi possível assumir a direção do culto.');
-        return;
-      }
-    }
-
-    login(selectedObreiro);
-    onSuccess(isDirigindoCulto || isAlreadyDirigente, selectedObreiro);
+    concluirEntrada(obreiro, rememberDevice);
   };
 
+  const handleEntrarSalvo = () => {
+    if (!savedLoginUser) return;
+    setErrorMsg('');
+    const atualizado = obreiros.find((o) => o.id === savedLoginUser.id) || savedLoginUser;
+    concluirEntrada(atualizado, true);
+  };
+
+  const savedAtivo =
+    savedLoginUser && obreiros.some((o) => o.id === savedLoginUser.id && o.ativo !== false);
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between p-4 sm:p-6 selection:bg-amber-500 selection:text-black">
-      {/* Barra Superior Discreta */}
-      <div className="max-w-md mx-auto w-full flex items-center justify-between py-2 text-xs">
-        <span className="text-amber-400 font-bold tracking-wider text-[11px] uppercase">
-          IPRA Avisos
-        </span>
-        <span className="text-slate-500 text-[11px] tracking-wide uppercase font-medium">
-          Auriflama • SP
-        </span>
-      </div>
-
-      {/* Cartão Principal */}
-      <div className="max-w-md mx-auto w-full bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-7 my-auto">
-        <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 mx-auto flex items-center justify-center text-amber-400 mb-3 shadow-inner">
-            <Church className="w-6 h-6" />
-          </div>
-          <h1 className="text-xl font-black tracking-tight text-white">
-            IPRA Auriflama
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Selecione seu nome e digite sua senha para entrar
-          </p>
-        </div>
-
-        <form onSubmit={handleEntrar} className="space-y-4">
-          <div>
-            <div className="flex items-center justify-between text-xs font-bold text-slate-400 mb-2">
-              <span className="uppercase tracking-wider text-[10px]">Identificação do Obreiro:</span>
-              <span className="text-slate-500 font-medium">{obreiros.length} obreiros</span>
-            </div>
-            
-            <div 
-              className="max-h-52 overflow-y-auto space-y-1.5 pr-1 border border-slate-800 rounded-2xl p-1.5 bg-slate-950/70 no-swipe shadow-inner" 
-              data-no-swipe="true"
-            >
-              {obreiros.map((ob) => {
-                const isSelected = selectedObreiro?.id === ob.id;
-                const isDirigenteDoCulto = cultoAtivo?.dirigenteId === ob.id;
-
-                return (
-                  <button
-                    key={ob.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedObreiro(ob);
-                      setErrorMsg('');
-                    }}
-                    className={`w-full text-left px-3 py-2.5 rounded-xl border flex items-center justify-between transition-all ${
-                      isSelected
-                        ? 'bg-slate-800/95 border-amber-500/80 text-white font-semibold shadow-sm ring-1 ring-amber-500/40'
-                        : 'bg-transparent border-transparent hover:bg-slate-850/60 text-slate-300 hover:border-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 transition-colors ${
-                          isSelected ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-300'
-                        }`}
-                      >
-                        {ob.nome.charAt(0)}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs sm:text-sm font-bold text-white leading-tight truncate">
-                          {ob.nome}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-medium truncate">
-                          {getCargoLabel(ob.cargo)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {isDirigenteDoCulto && (
-                        <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1 uppercase tracking-wide">
-                          <Crown className="w-2.5 h-2.5 text-amber-400" /> Dirigente
-                        </span>
-                      )}
-                      {isSelected && <Check className="w-4 h-4 text-amber-400" />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-                <span>Senha de Acesso:</span>
-              </span>
-              <span className="text-[10px] text-slate-500 font-normal">
-                Padrão: <strong className="text-amber-400 font-bold">1234</strong>
-              </span>
-            </label>
-            <input
-              type="password"
-              inputMode="numeric"
-              required
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              placeholder="Digite sua senha (padrão: 1234)"
-              className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-700 bg-slate-950 text-white placeholder-slate-500 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 focus:outline-none transition-all font-mono"
+    <div className="h-full w-full overflow-y-auto overscroll-y-contain no-scrollbar bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white flex flex-col">
+      {/* Cabeçalho Institucional IPRB */}
+      <div className="bg-gradient-to-b from-[#062552] to-[#03589E] text-white px-4 pt-7 pb-11 shadow-md shrink-0">
+        <div className="max-w-md mx-auto flex flex-col items-center text-center gap-3">
+          <div className="w-24 h-24 rounded-full bg-white p-1.5 shadow-xl border-4 border-white/85 flex items-center justify-center">
+            <img
+              src="/logo-ipra.png"
+              alt="Logo Igreja Presbiteriana Renovada de Auriflama"
+              className="w-full h-full object-contain"
             />
-            <p className="text-[10px] text-slate-500 mt-1">
-              Todos os membros iniciam com a senha <strong className="text-slate-400">1234</strong>. Você pode alterá-la em Ajustes.
+          </div>
+          <div>
+            <h1 className="text-2xl font-black tracking-tight text-white">IPRA Avisos</h1>
+            <p className="text-sm text-sky-100 font-medium mt-0.5">
+              Igreja Presbiteriana Renovada de Auriflama
             </p>
           </div>
 
-          <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 space-y-1.5">
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isDirigindoCulto}
-                onChange={(e) => setIsDirigindoCulto(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500 shrink-0"
-              />
-              <div>
-                <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                  <Crown className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Estou dirigindo o culto de hoje</span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-tight mt-0.5 font-normal">
-                  Assume a direção da sessão para receber avisos prioritários no Púlpito.
-                </p>
-              </div>
-            </label>
+          {cultoEmAndamento && cultoAtivo && (
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#041938]/85 border border-sky-300/30 text-xs font-bold text-[#FBB016]">
+              <span className="w-2 h-2 rounded-full bg-[#E85D04] animate-pulse shrink-0" />
+              <span className="truncate max-w-[260px]">{cultoAtivo.nomeCulto}</span>
+            </div>
+          )}
+        </div>
+      </div>
 
-            {isDirigindoCulto && isSelectedAlreadyDirigente && (
-              <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] flex items-center gap-1.5 mt-1.5">
-                <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span>Você já está registrado como dirigente ativo desta sessão.</span>
+      {/* Cartão de Acesso Material Design 3 */}
+      <div className="w-full max-w-md mx-auto px-4 -mt-6 pb-8 flex-1 space-y-4">
+        {/* Acesso salvo no aparelho */}
+        {savedAtivo && savedLoginUser && (
+          <div className="bg-white dark:bg-[#081529] border border-[#D5E2F0] dark:border-[#1C3559] rounded-3xl shadow-card p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 rounded-full bg-[#03589E] text-white font-black text-lg flex items-center justify-center shrink-0">
+                  {savedLoginUser.nome.charAt(0)}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                    Acesso salvo neste aparelho
+                  </p>
+                  <p className="text-base font-extrabold text-[#062552] dark:text-white truncate">
+                    {savedLoginUser.nome}
+                  </p>
+                  <p className="text-xs font-semibold text-[#03589E] dark:text-[#60A5FA] truncate">
+                    {getCargoLabel(savedLoginUser.cargo)}
+                  </p>
+                </div>
               </div>
-            )}
+
+              <button
+                type="button"
+                onClick={clearSavedLogin}
+                className="p-2.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors shrink-0"
+                aria-label="Remover acesso salvo"
+                title="Remover acesso salvo"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleEntrarSalvo}
+              className="w-full py-3.5 px-4 rounded-2xl bg-[#03589E] hover:bg-[#062552] active:scale-[0.99] text-white font-extrabold text-base shadow-sm flex items-center justify-center gap-2 transition-all min-h-[50px]"
+            >
+              <span>Entrar como {savedLoginUser.nome.split(' ')[0]}</span>
+              <ArrowRight className="w-5 h-5 shrink-0" />
+            </button>
+          </div>
+        )}
+
+        {/* Formulário Nome e Senha */}
+        <form
+          onSubmit={handleEntrar}
+          className="bg-white dark:bg-[#081529] border border-[#D5E2F0] dark:border-[#1C3559] rounded-3xl shadow-card p-5 space-y-4"
+        >
+          <h2 className="text-lg font-extrabold text-[#062552] dark:text-white">
+            {savedAtivo ? 'Ou entrar com outro acesso' : 'Entrar'}
+          </h2>
+
+          {/* Campo Nome */}
+          <div>
+            <label
+              htmlFor="login-nome"
+              className="block text-sm font-bold text-[#062552] dark:text-slate-200 mb-1.5"
+            >
+              Nome
+            </label>
+            <div className="relative">
+              <User className="w-5 h-5 text-[#03589E] dark:text-sky-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                id="login-nome"
+                type="text"
+                autoComplete="name"
+                value={nomeInput}
+                onChange={(e) => {
+                  setNomeInput(e.target.value);
+                  setErrorMsg('');
+                }}
+                placeholder="Digite seu nome"
+                className="w-full pl-11 pr-4 py-3.5 rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white text-base placeholder:text-slate-400 focus:bg-white dark:focus:bg-[#040B16] focus:border-[#03589E] focus:outline-none"
+              />
+            </div>
           </div>
 
+          {/* Campo Senha */}
+          <div>
+            <label
+              htmlFor="login-pin"
+              className="block text-sm font-bold text-[#062552] dark:text-slate-200 mb-1.5"
+            >
+              Senha
+            </label>
+            <div className="relative">
+              <KeyRound className="w-5 h-5 text-[#03589E] dark:text-sky-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                id="login-pin"
+                type={showPin ? 'text' : 'password'}
+                inputMode="numeric"
+                value={pin}
+                onChange={(e) => {
+                  setPin(e.target.value);
+                  setErrorMsg('');
+                }}
+                placeholder="Digite sua senha"
+                className="w-full pl-11 pr-20 py-3.5 text-base tracking-wider rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white placeholder:text-slate-400 placeholder:tracking-normal focus:bg-white dark:focus:bg-[#040B16] focus:border-[#03589E] focus:outline-none font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPin(!showPin)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-2 rounded-xl text-xs font-bold text-[#03589E] dark:text-sky-300 hover:bg-[#E8F2FC] dark:hover:bg-[#0D1E38] flex items-center gap-1"
+              >
+                {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                <span>{showPin ? 'Ocultar' : 'Ver'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Salvar login neste aparelho */}
+          <button
+            type="button"
+            onClick={() => setRememberDevice(!rememberDevice)}
+            className="w-full flex items-center gap-3 py-2 text-left"
+          >
+            <div
+              className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors ${
+                rememberDevice
+                  ? 'bg-[#03589E] border-[#03589E] text-white'
+                  : 'bg-[#F4F7FB] dark:bg-[#040B16] border-slate-400'
+              }`}
+            >
+              {rememberDevice && <Check className="w-4 h-4 stroke-[3]" />}
+            </div>
+            <span className="text-sm font-semibold text-[#062552] dark:text-slate-200">
+              Salvar acesso neste aparelho
+            </span>
+          </button>
+
+          {/* Opção de Dirigente quando houver culto ativo */}
+          {cultoEmAndamento && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsDirigindoCulto(!isDirigindoCulto);
+                setNeedsAdminOverride(false);
+                setErrorMsg('');
+              }}
+              className={`w-full text-left rounded-2xl p-3 border-2 flex items-center gap-3 transition-all ${
+                isDirigindoCulto
+                  ? 'bg-[#FFF9EB] dark:bg-amber-950/40 border-[#F59E0B] text-[#062552] dark:text-white'
+                  : 'bg-[#F4F7FB] dark:bg-[#040B16] border-[#D5E2F0] dark:border-[#1C3559] text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              <div
+                className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 ${
+                  isDirigindoCulto
+                    ? 'bg-[#E85D04] border-[#E85D04] text-white'
+                    : 'bg-white dark:bg-[#081529] border-slate-400'
+                }`}
+              >
+                {isDirigindoCulto && <Check className="w-4 h-4 stroke-[3]" />}
+              </div>
+              <div className="flex items-center gap-1.5 text-sm font-bold">
+                <Crown className="w-4 h-4 text-[#E85D04] dark:text-[#FBB016] shrink-0" />
+                <span>Vou dirigir os avisos hoje</span>
+              </div>
+            </button>
+          )}
+
+          {needsAdminOverride && isDirigindoCulto && (
+            <div className="p-3 rounded-2xl bg-[#FFF9EB] dark:bg-amber-950/40 border border-[#F59E0B]/50 space-y-2">
+              <label className="block text-xs font-bold text-[#92400E] dark:text-[#FBB016]">
+                Senha administrativa para trocar o dirigente
+              </label>
+              <input
+                type="password"
+                inputMode="numeric"
+                value={adminOverridePin}
+                onChange={(e) => setAdminOverridePin(e.target.value)}
+                placeholder="Senha administrativa"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#F59E0B]/60 bg-white dark:bg-[#040B16] text-[#0D213A] dark:text-white text-base font-mono"
+              />
+            </div>
+          )}
+
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-950/50 border border-rose-800 text-rose-300 text-xs font-medium animate-in fade-in duration-100">
+            <div
+              role="alert"
+              className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200 text-sm font-bold leading-snug"
+            >
               {errorMsg}
             </div>
           )}
 
           <button
             type="submit"
-            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:scale-[0.99] text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all touch-target"
+            className="w-full py-4 px-5 rounded-2xl bg-[#03589E] hover:bg-[#062552] active:scale-[0.99] text-white font-extrabold text-base shadow-md flex items-center justify-center gap-2 transition-all min-h-[54px]"
           >
-            <span>Entrar no Sistema</span>
-            <ArrowRight className="w-4 h-4 font-bold" />
+            <span>Entrar</span>
+            <ArrowRight className="w-5 h-5 shrink-0" />
           </button>
         </form>
-      </div>
 
-      <div className="max-w-md mx-auto w-full text-center text-[11px] text-slate-500 py-2">
-        Igreja Presbiteriana Renovada • Auriflama / SP
+        <p className="text-center text-xs text-slate-500 dark:text-slate-400 font-medium pt-1">
+          Igreja Presbiteriana Renovada de Auriflama
+        </p>
       </div>
     </div>
   );

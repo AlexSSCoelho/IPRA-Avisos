@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, CheckCircle2, MapPin, Church as ChurchIcon } from 'lucide-react';
+import { Send, CheckCircle2, MapPin, Church as ChurchIcon, User } from 'lucide-react';
 import { useAvisos } from '../../context/AvisosContext';
 
 export const FormVisitante: React.FC = () => {
@@ -28,7 +28,7 @@ export const FormVisitante: React.FC = () => {
     });
 
     setShowSuccessToast(true);
-    setTimeout(() => setShowSuccessToast(false), 3000);
+    setTimeout(() => setShowSuccessToast(false), 4000);
 
     setNome('');
     setCidade('');
@@ -37,56 +37,51 @@ export const FormVisitante: React.FC = () => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200/80 dark:border-slate-800 space-y-4 w-full max-w-full overflow-hidden transition-surface">
-      
-      {/* Banner de Sucesso */}
-      {showSuccessToast && (
-        <div className="bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 px-3.5 py-2.5 rounded-xl flex items-center gap-2 animate-in fade-in zoom-in-95 duration-150 shadow-xs">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <span className="text-xs font-bold">
-            Visitante transmitido ao Púlpito com sucesso!
-          </span>
-        </div>
-      )}
-
+    <form onSubmit={handleSubmit} className="space-y-4 w-full">
       {/* 1. Nome do Visitante */}
       <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-          Nome do Visitante ou Família: <span className="text-rose-500">*</span>
+        <label
+          htmlFor="vis-nome"
+          className="flex items-center gap-1.5 text-sm font-extrabold text-[#062552] dark:text-white mb-1.5"
+        >
+          <User className="w-4 h-4 text-[#03589E] dark:text-sky-300" />
+          <span>Nome do Visitante ou Família <span className="text-rose-600">*</span></span>
         </label>
         <input
+          id="vis-nome"
           type="text"
           required
           value={nome}
           onChange={(e) => setNome(e.target.value)}
-          placeholder="Ex: Irmão Roberto Silva e Família"
-          className="w-full px-3.5 py-3 text-sm sm:text-base rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-950 focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
+          placeholder="Ex: Roberto Silva e Família"
+          className="w-full px-4 py-3.5 text-base rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-[#040B16] focus:border-[#03589E] focus:ring-2 focus:ring-[#03589E]/20 focus:outline-none transition-all"
         />
       </div>
 
-      {/* 2. Gênero / Grupo (Segmentos com quebra responsiva) */}
+      {/* 2. Quem está visitando */}
       <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-          Composição:
+        <label className="block text-sm font-extrabold text-[#062552] dark:text-white mb-1.5">
+          Quem é o visitante?
         </label>
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 bg-slate-100 dark:bg-slate-950 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 no-swipe" data-no-swipe="true">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {[
-            { id: 'homem' as const, label: 'Homem' },
-            { id: 'mulher' as const, label: 'Mulher' },
+            { id: 'homem' as const, label: 'Irmão / Homem' },
+            { id: 'mulher' as const, label: 'Irmã / Mulher' },
             { id: 'casal' as const, label: 'Casal' },
             { id: 'familia' as const, label: 'Família' },
-            { id: 'crianca' as const, label: 'Jovem' },
-          ].map((item) => {
+            { id: 'crianca' as const, label: 'Jovem / Criança' },
+          ].map((item, idx) => {
             const isSelected = genero === item.id;
+            const spanLast = idx === 4 ? 'col-span-2 sm:col-span-1' : '';
             return (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => setGenero(item.id)}
-                className={`py-2.5 px-1 rounded-xl text-xs sm:text-sm font-bold text-center transition-all truncate ${
+                className={`py-3 px-2.5 rounded-xl border-2 text-sm font-bold text-center transition-all min-h-[48px] ${spanLast} ${
                   isSelected
-                    ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-xs font-black ring-1 ring-indigo-500/40'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/40'
+                    ? 'bg-[#03589E] border-[#03589E] text-white shadow-sm'
+                    : 'bg-[#F4F7FB] dark:bg-[#040B16] border-[#D5E2F0] dark:border-[#1C3559] text-[#0D213A] dark:text-slate-200 hover:border-[#03589E]'
                 }`}
               >
                 {item.label}
@@ -98,55 +93,80 @@ export const FormVisitante: React.FC = () => {
 
       {/* 3. Cidade de Origem */}
       <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
-          <MapPin className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
-          <span>Cidade de Origem:</span>
+        <label
+          htmlFor="vis-cidade"
+          className="flex items-center gap-1.5 text-sm font-extrabold text-[#062552] dark:text-white mb-1.5"
+        >
+          <MapPin className="w-4 h-4 text-[#03589E] dark:text-sky-300" />
+          <span>Cidade onde mora (Opcional)</span>
         </label>
         <input
+          id="vis-cidade"
           type="text"
           value={cidade}
           onChange={(e) => setCidade(e.target.value)}
-          placeholder="Ex: Auriflama, Jales, Votuporanga, São Paulo..."
-          className="w-full px-3.5 py-3 text-sm sm:text-base rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-950 focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
+          placeholder="Ex: Auriflama ou Jales"
+          className="w-full px-4 py-3.5 text-base rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-[#040B16] focus:border-[#03589E] focus:ring-2 focus:ring-[#03589E]/20 focus:outline-none transition-all"
         />
       </div>
 
       {/* 4. Igreja / Denominação */}
       <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
-          <ChurchIcon className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
-          <span>Igreja / Congregação de Origem:</span>
+        <label
+          htmlFor="vis-igreja"
+          className="flex items-center gap-1.5 text-sm font-extrabold text-[#062552] dark:text-white mb-1.5"
+        >
+          <ChurchIcon className="w-4 h-4 text-[#03589E] dark:text-sky-300" />
+          <span>Igreja de origem (Opcional)</span>
         </label>
         <input
+          id="vis-igreja"
           type="text"
           value={igreja}
           onChange={(e) => setIgreja(e.target.value)}
-          placeholder="Ex: Primeira visita, IPRA Central, Assembleia de Deus..."
-          className="w-full px-3.5 py-3 text-sm sm:text-base rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-950 focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
+          placeholder="Ex: Igreja ou primeira visita"
+          className="w-full px-4 py-3.5 text-base rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-[#040B16] focus:border-[#03589E] focus:ring-2 focus:ring-[#03589E]/20 focus:outline-none transition-all"
         />
       </div>
 
       {/* 5. Acompanhante / Observação */}
       <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-          Observação ou Convidado de quem? (Opcional):
+        <label
+          htmlFor="vis-obs"
+          className="block text-sm font-extrabold text-[#062552] dark:text-white mb-1.5"
+        >
+          Veio a convite de quem? / Observação (Opcional)
         </label>
         <input
+          id="vis-obs"
           type="text"
           value={observacao}
           onChange={(e) => setObservacao(e.target.value)}
-          placeholder="Ex: Convidado do Pb. Marcos / Parente da irmã Neusa"
-          className="w-full px-3.5 py-3 text-sm sm:text-base rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-950 focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
+          placeholder="Ex: Convidado da irmã Neusa"
+          className="w-full px-4 py-3.5 text-base rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-[#040B16] focus:border-[#03589E] focus:ring-2 focus:ring-[#03589E]/20 focus:outline-none transition-all"
         />
       </div>
+
+      {/* Confirmação visível exatamente acima do botão de envio */}
+      {showSuccessToast && (
+        <div
+          role="status"
+          className="bg-emerald-50 dark:bg-emerald-950/70 border-2 border-emerald-500 text-emerald-900 dark:text-emerald-200 px-4 py-3.5 rounded-2xl flex items-center gap-2.5 shadow-sm"
+        >
+          <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <span className="text-sm sm:text-base font-extrabold">
+            Visitante enviado para o púlpito.
+          </span>
+        </div>
+      )}
 
       {/* Botão de Enviar */}
       <button
         type="submit"
-        className="w-full py-4 rounded-xl bg-gradient-to-r from-indigo-700 to-indigo-600 hover:from-indigo-600 hover:to-indigo-500 active:scale-[0.99] text-white font-black text-sm sm:text-base shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all touch-target"
+        className="w-full py-4 px-5 rounded-2xl bg-[#03589E] hover:bg-[#0A6AC0] active:scale-[0.99] text-white font-extrabold text-base shadow-md flex items-center justify-center gap-2 transition-all min-h-[54px]"
       >
-        <Send className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-        <span>Transmitir Visitante ao Púlpito</span>
+        <Send className="w-5 h-5 shrink-0" />
+        <span>Enviar Visitante</span>
       </button>
     </form>
   );

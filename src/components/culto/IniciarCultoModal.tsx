@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Church, X, Clock, Crown, Sparkles, Check } from 'lucide-react';
+import { Church, X, Clock, Crown, Check, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCulto } from '../../context/CultoContext';
 import { getCargoLabel } from '../../utils/formatters';
@@ -11,18 +11,26 @@ interface IniciarCultoModalProps {
 }
 
 const SUGESTOES_CULTO = [
-  'Culto da Família & Celebração',
-  'Culto de Doutrina & Estudo Bíblico',
-  'Culto de Oração & Clamor',
-  'Culto de Jovens & Mocidade (UMERP)',
+  'Culto da Família e Celebração',
+  'Culto de Doutrina e Estudo',
+  'Culto de Oração e Clamor',
+  'Culto de Jovens e Mocidade',
   'Santa Ceia do Senhor',
-  'Culto de Missões & Evangelismo',
+  'Culto de Missões e Evangelismo',
   'Vigília de Oração',
   'Outro Culto',
 ];
 
 export const IniciarCultoModal: React.FC<IniciarCultoModalProps> = ({
   isOpen,
+  onClose,
+  onSuccess,
+}) => {
+  if (!isOpen) return null;
+  return <IniciarCultoModalContent onClose={onClose} onSuccess={onSuccess} />;
+};
+
+const IniciarCultoModalContent: React.FC<{ onClose: () => void; onSuccess?: () => void }> = ({
   onClose,
   onSuccess,
 }) => {
@@ -34,199 +42,178 @@ export const IniciarCultoModal: React.FC<IniciarCultoModalProps> = ({
   const [selectedDirigenteId, setSelectedDirigenteId] = useState<string>(
     currentUser?.id || (obreiros[0] ? obreiros[0].id : '')
   );
-  const [horario, setHorario] = useState(() => {
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
-    return `${hh}:${mm}`;
-  });
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [horario, setHorario] = useState('19:30');
+  const [erro, setErro] = useState<string | null>(null);
 
-  if (!isOpen) return null;
+  const isOutroCulto = nomeCultoPreset === 'Outro Culto';
 
-  const handleIniciar = (e: React.FormEvent) => {
+  const lideresOrdenados = [...obreiros]
+    .filter((o) => o.ativo !== false)
+    .sort((a, b) => {
+      const rank = (c: string) => (c === 'pastor' ? 1 : c === 'presbitero' ? 2 : 3);
+      return rank(a.cargo) - rank(b.cargo);
+    });
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
+    setErro(null);
 
-    const nomeFinal =
-      nomeCultoPreset === 'Outro Culto'
-        ? nomeCultoPersonalizado.trim() || 'Culto de Celebração'
-        : nomeCultoPreset;
-
-    const dirigente = obreiros.find((o) => o.id === selectedDirigenteId) || currentUser || obreiros[0];
-
-    if (!dirigente) return;
-
-    const resultado = iniciarNovoCulto(nomeFinal, dirigente, horario);
-
-    if (!resultado.success) {
-      setErrorMsg(resultado.message || 'Não foi possível iniciar o culto.');
+    const nomeFinal = isOutroCulto ? nomeCultoPersonalizado.trim() : nomeCultoPreset;
+    if (!nomeFinal) {
+      setErro('Informe o nome do culto antes de continuar.');
       return;
     }
 
-    setShowSuccess(true);
+    const dirigente = obreiros.find((o) => o.id === selectedDirigenteId);
+    if (!dirigente) {
+      setErro('Selecione quem irá dirigir o culto de hoje.');
+      return;
+    }
 
-    setTimeout(() => {
-      setShowSuccess(false);
-      onClose();
-      if (onSuccess) onSuccess();
-    }, 800);
+    const res = iniciarNovoCulto(nomeFinal, dirigente, horario.trim() || undefined);
+    if (!res.success) {
+      setErro(res.message || 'Não foi possível iniciar o culto.');
+      return;
+    }
+
+    if (onSuccess) onSuccess();
+    onClose();
   };
 
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden text-slate-100 max-h-[90vh] flex flex-col">
-        
-        {/* Header do Modal */}
-        <div className="bg-slate-950 px-5 py-4 border-b border-slate-800 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
-              <Church className="w-4 h-4" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#040B16]/75 backdrop-blur-sm">
+      <div className="bg-white dark:bg-[#081529] border-2 border-[#D5E2F0] dark:border-[#1C3559] rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Cabeçalho IPRB */}
+        <div className="bg-gradient-to-r from-[#062552] to-[#03589E] px-5 py-4 text-white flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/15 rounded-xl">
+              <Church className="w-6 h-6 text-[#FBB016]" />
             </div>
-            <h3 className="font-bold text-sm text-white">Iniciar Novo Culto</h3>
+            <div>
+              <h2 className="text-lg font-extrabold leading-tight">Iniciar Culto</h2>
+              <p className="text-xs text-[#E8F2FC]">Selecione o culto e quem dirige</p>
+            </div>
           </div>
+
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-2 rounded-xl bg-white/15 hover:bg-white/25 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+            aria-label="Fechar modal"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Corpo do Modal */}
-        <form onSubmit={handleIniciar} className="p-5 space-y-4 overflow-y-auto">
-          <div className="text-xs text-slate-300 bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 leading-relaxed">
-            Ao iniciar um novo culto, a lista de leitura no Púlpito é renovada e os registros anteriores permanecem preservados no Histórico.
-          </div>
+        {/* Corpo */}
+        <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-5">
+          {erro && (
+            <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200 text-sm font-bold flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <span>{erro}</span>
+            </div>
+          )}
 
-          {/* 1. Nome do Culto */}
+          {/* Tipo de Culto */}
           <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Tipo de Culto:</span>
+            <label className="block text-sm font-extrabold text-[#062552] dark:text-white mb-2">
+              1. Qual é o culto de hoje?
             </label>
-            <div className="flex flex-wrap gap-1.5 mb-2 no-swipe" data-no-swipe="true">
-              {SUGESTOES_CULTO.map((item) => {
-                const isSelected = nomeCultoPreset === item;
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {SUGESTOES_CULTO.map((sugestao) => {
+                const isSelected = nomeCultoPreset === sugestao;
                 return (
                   <button
-                    key={item}
+                    key={sugestao}
                     type="button"
-                    onClick={() => setNomeCultoPreset(item)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all truncate ${
+                    onClick={() => setNomeCultoPreset(sugestao)}
+                    className={`p-3 rounded-2xl border-2 text-left text-xs sm:text-sm font-bold transition-all flex items-center justify-between gap-2 min-h-[48px] ${
                       isSelected
-                        ? 'bg-amber-500 text-slate-950 font-bold border-transparent shadow-sm'
-                        : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800'
+                        ? 'bg-[#03589E] border-[#03589E] text-white shadow-sm'
+                        : 'bg-[#F4F7FB] dark:bg-[#040B16] border-[#D5E2F0] dark:border-[#1C3559] text-[#0D213A] dark:text-slate-200 hover:border-[#03589E]'
                     }`}
                   >
-                    {item}
+                    <span className="leading-snug">{sugestao}</span>
+                    {isSelected && <Check className="w-4 h-4 shrink-0" />}
                   </button>
                 );
               })}
             </div>
 
-            {nomeCultoPreset === 'Outro Culto' && (
+            {isOutroCulto && (
               <input
                 type="text"
                 required
                 value={nomeCultoPersonalizado}
                 onChange={(e) => setNomeCultoPersonalizado(e.target.value)}
-                placeholder="Digite o título do culto especial"
-                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-700 bg-slate-950 text-white focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 mt-1 transition-all"
+                placeholder="Digite o nome do culto ou evento"
+                className="w-full px-4 py-3 text-base rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white mt-2.5 focus:border-[#03589E] focus:outline-none"
               />
             )}
           </div>
 
-          {/* 2. Seleção do Dirigente */}
+          {/* Horário */}
           <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1">
-              <Crown className="w-3.5 h-3.5 text-amber-400" />
-              <span>Dirigente no Púlpito:</span>
+            <label className="flex items-center gap-1.5 text-sm font-extrabold text-[#062552] dark:text-white mb-2">
+              <Clock className="w-4 h-4 text-[#03589E] dark:text-[#60A5FA]" />
+              <span>2. Horário de início</span>
             </label>
-            <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 border border-slate-800 rounded-2xl p-1.5 bg-slate-950/60 no-swipe shadow-inner" data-no-swipe="true">
-              {obreiros.map((ob) => {
-                const isSelected = selectedDirigenteId === ob.id;
+            <input
+              type="text"
+              value={horario}
+              onChange={(e) => setHorario(e.target.value)}
+              placeholder="Ex: 19:30"
+              className="w-full px-4 py-3 text-base font-bold rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white focus:border-[#03589E] focus:outline-none"
+            />
+          </div>
+
+          {/* Dirigente */}
+          <div>
+            <label className="flex items-center gap-1.5 text-sm font-extrabold text-[#062552] dark:text-white mb-2">
+              <Crown className="w-4 h-4 text-[#E85D04] dark:text-[#FBB016]" />
+              <span>3. Quem vai dirigir os avisos hoje?</span>
+            </label>
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              {lideresOrdenados.map((o) => {
+                const selected = selectedDirigenteId === o.id;
                 return (
                   <button
-                    key={ob.id}
+                    key={o.id}
                     type="button"
-                    onClick={() => setSelectedDirigenteId(ob.id)}
-                    className={`w-full text-left px-3 py-2 rounded-xl border flex items-center justify-between transition-all ${
-                      isSelected
-                        ? 'bg-slate-800 border-amber-500/70 text-white font-semibold shadow-xs ring-1 ring-amber-500/30'
-                        : 'border-transparent hover:bg-slate-850 text-slate-300'
+                    onClick={() => setSelectedDirigenteId(o.id)}
+                    className={`w-full p-3.5 rounded-2xl border-2 text-left transition-all flex items-center justify-between gap-2 min-h-[52px] ${
+                      selected
+                        ? 'bg-[#FFF4E5] dark:bg-[#F59E0B]/15 border-[#E85D04] dark:border-[#FBB016] text-[#062552] dark:text-white shadow-sm'
+                        : 'bg-[#F4F7FB] dark:bg-[#040B16] border-[#D5E2F0] dark:border-[#1C3559] text-[#0D213A] dark:text-slate-200 hover:border-[#03589E]'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
-                          isSelected ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-400'
-                        }`}
-                      >
-                        {ob.nome.charAt(0)}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-white leading-tight truncate">
-                          {ob.nome}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-medium truncate">
-                          {getCargoLabel(ob.cargo)}
-                        </div>
-                      </div>
+                    <div>
+                      <p className="font-extrabold text-sm sm:text-base">{o.nome}</p>
+                      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        {getCargoLabel(o.cargo)}
+                      </p>
                     </div>
-                    {isSelected && <Check className="w-4 h-4 text-amber-400 shrink-0" />}
+                    {selected && <Check className="w-5 h-5 text-[#E85D04] dark:text-[#FBB016] shrink-0" />}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* 3. Horário de Início */}
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5 text-slate-500" />
-              <span>Horário de Início:</span>
-            </label>
-            <input
-              type="time"
-              value={horario}
-              onChange={(e) => setHorario(e.target.value)}
-              className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-700 bg-slate-950 text-white focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 transition-all"
-            />
-          </div>
-
-          {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
-          {showSuccess && (
-            <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-              <Check className="w-4 h-4 text-emerald-400" />
-              <span>Novo culto aberto com sucesso!</span>
-            </div>
-          )}
-
-
-          {/* Botões */}
-          <div className="flex gap-2.5 pt-2 shrink-0">
+          <div className="pt-2 flex items-center gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 text-xs font-bold rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors"
+              className="flex-1 py-3.5 px-4 rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#062552] dark:text-slate-200 font-bold text-sm min-h-[52px]"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="flex-1 py-3 text-xs font-black rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-1.5 touch-target"
+              className="flex-[2] py-3.5 px-5 rounded-2xl bg-[#03589E] hover:bg-[#062552] text-white font-extrabold text-base shadow-md transition-all flex items-center justify-center gap-2 min-h-[52px]"
             >
-              <Church className="w-4 h-4 font-bold" />
-              <span>Abrir Sessão do Culto</span>
+              <Church className="w-5 h-5 shrink-0" />
+              <span>Abrir Culto</span>
             </button>
           </div>
         </form>
