@@ -24,7 +24,10 @@ export const STORAGE_KEYS = {
   FIREBASE_CONFIG: 'ipra_firebase_config_v2',
   ADMIN_PIN: 'ipra_admin_pin_v2',
   FONT_SCALE: 'ipra_font_scale_v2',
+  DARK_MODE: 'ipra_dark_mode_v2',
+  SOUND_ENABLED: 'ipra_sound_enabled_v2',
   CURRENT_USER: 'ipra_current_user_v2',
+  SAVED_LOGIN_USER: 'ipra_saved_login_user_v2',
   OBREIRO_PINS: 'ipra_obreiro_pins_v2',
 };
 
@@ -165,7 +168,7 @@ class StorageService {
     const trimmed = pin.trim();
     if (!trimmed) return false;
     const expected = this.getObreiroPin(obreiroId);
-    return trimmed === expected || trimmed === DEFAULT_APP_PIN;
+    return trimmed === expected;
   }
 
   public getFirebaseConfig(): FirebaseConfig | null {

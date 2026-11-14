@@ -4,12 +4,14 @@ import { storageService, STORAGE_KEYS } from '../services/storageService';
 
 interface AuthContextType {
   currentUser: Obreiro | null;
+  savedLoginUser: Obreiro | null;
   obreiros: Obreiro[];
   /** App em modo de primeira configuração (sem nenhum obreiro cadastrado) */
   isBootstrap: boolean;
   /** PIN administrativo foi configurado pelo admin */
   hasPinConfigured: boolean;
-  login: (obreiro: Obreiro) => void;
+  login: (obreiro: Obreiro, rememberDevice?: boolean) => void;
+  clearSavedLogin: () => void;
   logout: () => void;
   verifyAdminPin: (pin: string) => boolean;
   verifyObreiroPin: (obreiroId: string, pin: string) => boolean;
@@ -38,7 +40,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentUser, setCurrentUser] = useState<Obreiro | null>(() => {
     try {
       const sessionUser = sessionStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-      return sessionUser ? JSON.parse(sessionUser) : null;
+      if (sessionUser) {
+        return JSON.parse(sessionUser);
+      }
+      const explicitLogout = sessionStorage.getItem('ipra_explicit_logout_v2');
+      if (!explicitLogout) {
+        const savedUser = localStorage.getItem(STORAGE_KEYS.SAVED_LOGIN_USER);
+        if (savedUser) {
+          const parsed: Obreiro = JSON.parse(savedUser);
+          sessionStorage.setItem(STORAGE_KEYS.CURRENT_USER, savedUser);
+          return parsed;
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [savedLoginUser, setSavedLoginUser] = useState<Obreiro | null>(() => {
+    try {
+      const savedUser = localStorage.getItem(STORAGE_KEYS.SAVED_LOGIN_USER);
+      return savedUser ? JSON.parse(savedUser) : null;
     } catch {
       return null;
     }
@@ -101,7 +124,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           persistedUser.ativo !== currentUser.ativo)
       ) {
         setCurrentUser(persistedUser);
-        localStorage.setItem('ipra_current_user_v1', JSON.stringify(persistedUser));
+        try {
+          sessionStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(persistedUser));
+        } catch {
+          // ignore
+        }
       }
     }
   // Executa apenas uma vez após o carregamento inicial
@@ -117,10 +144,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     (currentUser?.nome?.toLowerCase().includes('alex') && currentUser?.isAdmin)
   );
 
-  const login = (obreiro: Obreiro): void => {
+  const login = (obreiro: Obreiro, rememberDevice = false): void => {
     setCurrentUser(obreiro);
     try {
+      sessionStorage.removeItem('ipra_explicit_logout_v2');
       sessionStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(obreiro));
+      if (rememberDevice) {
+        localStorage.setItem(STORAGE_KEYS.SAVED_LOGIN_USER, JSON.stringify(obreiro));
+        setSavedLoginUser(obreiro);
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.SAVED_LOGIN_USER);
+        setSavedLoginUser(null);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const clearSavedLogin = () => {
+    setSavedLoginUser(null);
+    try {
+      localStorage.removeItem(STORAGE_KEYS.SAVED_LOGIN_USER);
     } catch {
       // ignore
     }
@@ -130,6 +174,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser(null);
     try {
       sessionStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+      sessionStorage.setItem('ipra_explicit_logout_v2', '1');
     } catch {
       // ignore
     }
@@ -149,8 +194,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const verifyAdminPin = (pin: string): boolean => {
     const stored = storageService.getAdminPin();
-    if (stored === null) return false;
-    return pin.trim() === stored || pin.trim() === '1234';
+    if (!stored) return false;
+    return pin.trim() === stored;
   };
 
   const updateAdminPin = (oldPin: string, newPin: string): boolean => {
@@ -225,7 +270,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ): { success: boolean; message?: string } => {
     // Apenas o Master tem poder de cadastrar novos obreiros na equipe
     if (!isMaster) {
-      return { success: false, message: 'Apenas o Administrador Master pode cadastrar obreiros.' };
+      return { success: false, message: 'Apenas o administrador principal pode cadastrar obreiros.' };
     }
     const newId = `obreiro_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const newObreiro: Obreiro = {
@@ -241,7 +286,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!isMaster) {
       return {
         success: false,
-        message: 'Apenas o Administrador Master pode importar a relação oficial de obreiros.',
+        message: 'Apenas o administrador principal pode importar a lista de obreiros.',
       };
     }
     const res = storageService.importarObreirosOficiais();
@@ -263,10 +308,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         currentUser,
+        savedLoginUser,
         obreiros,
         isBootstrap,
         hasPinConfigured,
         login,
+        clearSavedLogin,
         logout,
         verifyAdminPin,
         verifyObreiroPin,

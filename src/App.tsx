@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AccessibilityProvider, useAccessibility } from './context/AccessibilityContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CultoProvider } from './context/CultoContext';
@@ -12,12 +12,19 @@ import { PulpitoScreen } from './components/pulpito/PulpitoScreen';
 import { HistoricoScreen } from './components/historico/HistoricoScreen';
 import { HomeScreen } from './components/home/HomeScreen';
 import { SettingsModal } from './components/configuracoes/SettingsModal';
+import type { TipoAviso } from './types';
 
 const AppContent: React.FC = () => {
   const { currentUser } = useAuth();
   const { isPulpitMode, modoFocadoPulpito, setModoFocadoPulpito } = useAccessibility();
   const { totalPendentes } = useAvisos();
   const [currentTab, setCurrentTab] = useState<AppTabType>('home');
+  const [diaconoCategory, setDiaconoCategory] = useState<TipoAviso>('visitante');
+  const mainRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+  }, [currentTab, diaconoCategory]);
   const [isIniciarCultoModalOpen, setIsIniciarCultoModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
@@ -41,73 +48,12 @@ const AppContent: React.FC = () => {
     }
   }, [currentTab, modoFocadoPulpito, setModoFocadoPulpito]);
 
-  // 4 Abas fixas, previsíveis e universais
-  const activeTabs: AppTabType[] = ['home', 'diacono', 'pulpito', 'historico'];
-
-  // --- CONTROLE DE GESTOS TOUCH (DESLIZAR O DEDO EM QUALQUER LUGAR DA TELA) ---
-  const touchStartX = useRef<number>(0);
-  const touchStartY = useRef<number>(0);
-  const touchStartTime = useRef<number>(0);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    // No modo imersivo do púlpito, bloqueia troca acidental de abas por swipe
-    if (isImersivo) return;
-
-    const target = e.target as HTMLElement | null;
-
-    // Cancela swipe em qualquer controle interativo ou área marcada como no-swipe
-    if (
-      target &&
-      target.closest(
-        'input, textarea, select, button, a, [data-no-swipe="true"], .no-swipe'
-      )
-    ) {
-      touchStartX.current = 0;
-      touchStartY.current = 0;
-      return;
+  const handleNavigate = (tab: AppTabType, category?: TipoAviso) => {
+    if (category) {
+      setDiaconoCategory(category);
     }
-
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-    touchStartTime.current = Date.now();
+    setCurrentTab(tab);
   };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX.current === 0) return;
-
-    const touchEndX = e.changedTouches[0].clientX;
-    const touchEndY = e.changedTouches[0].clientY;
-    const deltaX = touchEndX - touchStartX.current;
-    const deltaY = touchEndY - touchStartY.current;
-    const duration = Date.now() - touchStartTime.current;
-
-    touchStartX.current = 0;
-    touchStartY.current = 0;
-
-    // Swipe horizontal seguro: mínimo 60 px, predominância horizontal clara (1.5x), até 600ms
-    if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5 && duration < 600) {
-      const currentIndex = activeTabs.indexOf(currentTab);
-      if (currentIndex === -1) return;
-
-      if (deltaX < 0 && currentIndex < activeTabs.length - 1) {
-        // Deslizar para a esquerda -> Próxima Aba
-        const nextTab = activeTabs[currentIndex + 1];
-        setCurrentTab(nextTab);
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          navigator.vibrate(20);
-        }
-      } else if (deltaX > 0 && currentIndex > 0) {
-        // Deslizar para a direita -> Aba Anterior
-        const prevTab = activeTabs[currentIndex - 1];
-        setCurrentTab(prevTab);
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          navigator.vibrate(20);
-        }
-      }
-    }
-  };
-
-  const activeTabIndex = Math.max(0, activeTabs.indexOf(currentTab));
 
   // Se o usuário não estiver logado, exibe tela de seleção de obreiro / login
   if (!currentUser) {
@@ -127,14 +73,14 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div 
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
+    <div
       className={`h-full w-full flex flex-col overflow-hidden transition-colors duration-200 ${
-        isPulpitMode ? 'bg-black text-white' : 'bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-white'
+        isPulpitMode
+          ? 'bg-[#040B16] text-white'
+          : 'bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white'
       }`}
     >
-      {/* Header Compacto com Status, Identidade e Acessibilidade (oculto no modo focado do púlpito) */}
+      {/* Cabeçalho Institucional IPRB (oculto no modo tela cheia do púlpito) */}
       {!isImersivo && (
         <Header
           onNavigateHome={() => setCurrentTab('home')}
@@ -143,40 +89,33 @@ const AppContent: React.FC = () => {
         />
       )}
 
-      {/* Conteúdo Principal em Carrossel Deslizante Fluido e Isolado */}
-      <main className="flex-1 w-full overflow-hidden flex flex-col relative">
-        <div 
-          className="flex h-full w-full transition-transform duration-300 ease-out will-change-transform"
-          style={{
-            transform: `translateX(-${activeTabIndex * 100}%)`,
-          }}
-        >
-          {/* Aba 0: Início / Hub do Culto */}
-          <div className="w-full h-full shrink-0 min-w-full overflow-y-auto overscroll-y-contain px-0 pb-20">
+      {/* Conteúdo Principal com rolagem isolada e previsível (sem troca acidental por swipe) */}
+      <main
+        ref={mainRef}
+        className={`flex-1 w-full overflow-y-auto overscroll-y-contain no-scrollbar ${isImersivo ? 'pb-6' : 'pb-24'}`}
+      >
+        <div className="max-w-2xl mx-auto px-3.5 pt-3.5">
+          {currentTab === 'home' && (
             <HomeScreen
-              onNavigate={(t) => setCurrentTab(t)}
+              onNavigate={handleNavigate}
               onOpenIniciarCulto={() => setIsIniciarCultoModalOpen(true)}
             />
-          </div>
+          )}
 
-          {/* Aba 1: Anotação de Diácono */}
-          <div className="w-full h-full shrink-0 min-w-full overflow-y-auto overscroll-y-contain px-0 pb-20">
-            <DiaconoDashboard />
-          </div>
+          {currentTab === 'diacono' && (
+            <DiaconoDashboard
+              activeCategory={diaconoCategory}
+              onChangeCategory={setDiaconoCategory}
+            />
+          )}
 
-          {/* Aba 2: Púlpito (maximiza área útil no modo focado) */}
-          <div className={`w-full h-full shrink-0 min-w-full overflow-y-auto overscroll-y-contain px-0 ${isImersivo ? 'pb-4' : 'pb-20'}`}>
-            <PulpitoScreen />
-          </div>
+          {currentTab === 'pulpito' && <PulpitoScreen />}
 
-          {/* Aba 3: Histórico */}
-          <div className="w-full h-full shrink-0 min-w-full overflow-y-auto overscroll-y-contain px-0 pb-20">
-            <HistoricoScreen />
-          </div>
+          {currentTab === 'historico' && <HistoricoScreen />}
         </div>
       </main>
 
-      {/* Navegação Inferior Mobile-First (oculta no modo focado do púlpito) */}
+      {/* Navegação Inferior Acessível (oculta no modo tela cheia do púlpito) */}
       {!isImersivo && (
         <BottomNav
           currentTab={currentTab}
@@ -186,7 +125,7 @@ const AppContent: React.FC = () => {
         />
       )}
 
-      {/* Modal de Configurações e Perfil do Usuário */}
+      {/* Modal de Configurações e Acessibilidade */}
       <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}

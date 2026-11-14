@@ -7,7 +7,7 @@ export interface BeforeInstallPromptEvent extends Event {
 }
 
 interface AccessibilityContextType {
-  fontScale: number; // 1.0 = Normal (100%), 1.15 = Médio (115%), 1.3 = Grande (130%), 1.5 = Extra Grande (150%), 1.7 = Máximo (170%)
+  fontScale: number; // 1.0 = Padrão Compacto (100%), 1.15 = Padrão Ampliado (115%), 1.25 = Grande (125%), 1.38 = Extra Grande (138%), 1.5 = Máximo (150%)
   setFontScale: (scale: number) => void;
   increaseFontSize: () => void;
   decreaseFontSize: () => void;
@@ -26,21 +26,50 @@ interface AccessibilityContextType {
 
 const AccessibilityContext = createContext<AccessibilityContextType | undefined>(undefined);
 
-const FONT_SCALES = [1.0, 1.15, 1.3, 1.45, 1.6, 1.8];
+export const FONT_SCALES = [1.0, 1.25];
+const DEFAULT_FONT_SCALE = 1.0;
+
+function normalizeFontScale(value: number): number {
+  if (Number.isNaN(value)) return DEFAULT_FONT_SCALE;
+  return value >= 1.13 ? 1.25 : 1.0;
+}
 
 export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [fontScale, setFontScaleState] = useState<number>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.FONT_SCALE);
-    return saved ? parseFloat(saved) : 1.15; // Inicia ligeiramente ampliado (115%) por padrão para conforto
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.FONT_SCALE);
+      if (saved) {
+        return normalizeFontScale(parseFloat(saved));
+      }
+    } catch {
+      // ignore
+    }
+    return DEFAULT_FONT_SCALE;
   });
 
-  const [isPulpitMode, setIsPulpitMode] = useState<boolean>(false);
+  const [isPulpitMode, setIsPulpitModeState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.DARK_MODE) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
   const [modoFocadoPulpito, setModoFocadoPulpito] = useState<boolean>(false);
 
   const toggleModoFocadoPulpito = useCallback(() => {
     setModoFocadoPulpito((prev) => !prev);
   }, []);
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+
+  const [soundEnabled, setSoundEnabledState] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.SOUND_ENABLED);
+      return saved === null ? true : saved === 'true';
+    } catch {
+      return true;
+    }
+  });
+
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -88,7 +117,11 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     document.documentElement.style.setProperty('--font-scale', fontScale.toString());
-    localStorage.setItem(STORAGE_KEYS.FONT_SCALE, fontScale.toString());
+    try {
+      localStorage.setItem(STORAGE_KEYS.FONT_SCALE, fontScale.toString());
+    } catch {
+      // ignore
+    }
   }, [fontScale]);
 
   useEffect(() => {
@@ -99,11 +132,31 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
       document.documentElement.classList.remove('dark');
       document.body.classList.remove('dark');
     }
+    try {
+      localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(isPulpitMode));
+    } catch {
+      // ignore
+    }
   }, [isPulpitMode]);
+
+  const setIsPulpitMode = useCallback((val: boolean) => {
+    setIsPulpitModeState(val);
+  }, []);
+
+  const setSoundEnabled = useCallback((val: boolean) => {
+    setSoundEnabledState(val);
+    try {
+      localStorage.setItem(STORAGE_KEYS.SOUND_ENABLED, String(val));
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const increaseFontSize = () => {
     const currentIndex = FONT_SCALES.findIndex((s) => s >= fontScale);
-    if (currentIndex < FONT_SCALES.length - 1) {
+    if (currentIndex === -1) {
+      setFontScaleState(FONT_SCALES[FONT_SCALES.length - 1]);
+    } else if (currentIndex < FONT_SCALES.length - 1) {
       setFontScaleState(FONT_SCALES[currentIndex + 1]);
     }
   };
@@ -112,15 +165,17 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
     const currentIndex = FONT_SCALES.findIndex((s) => s >= fontScale);
     if (currentIndex > 0) {
       setFontScaleState(FONT_SCALES[currentIndex - 1]);
+    } else if (currentIndex === -1) {
+      setFontScaleState(FONT_SCALES[FONT_SCALES.length - 2]);
     }
   };
 
   const resetFontSize = () => {
-    setFontScaleState(1.15);
+    setFontScaleState(DEFAULT_FONT_SCALE);
   };
 
   const setFontScale = (scale: number) => {
-    setFontScaleState(scale);
+    setFontScaleState(normalizeFontScale(scale));
   };
 
   return (

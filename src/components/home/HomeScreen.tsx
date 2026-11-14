@@ -1,20 +1,27 @@
 import React, { useState } from 'react';
-import { 
-  Radio, 
-  PenSquare, 
-  Tv, 
-  Crown, 
-  Clock, 
-  Play, 
-  Flag
+import {
+  Church,
+  UserPlus,
+  HeartHandshake,
+  Calendar,
+  Megaphone,
+  Mic,
+  History,
+  Crown,
+  ArrowRight,
+  Flag,
+  AlertTriangle,
+  PlusCircle,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCulto } from '../../context/CultoContext';
 import { useAvisos } from '../../context/AvisosContext';
 import { getCargoLabel } from '../../utils/formatters';
+import type { AppTabType } from '../common/BottomNav';
+import type { TipoAviso } from '../../types';
 
 interface HomeScreenProps {
-  onNavigate: (tab: 'home' | 'diacono' | 'pulpito' | 'historico') => void;
+  onNavigate: (tab: AppTabType, category?: TipoAviso) => void;
   onOpenIniciarCulto: () => void;
 }
 
@@ -24,220 +31,300 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 }) => {
   const { currentUser, isAdmin } = useAuth();
   const { cultoAtivo, isDirigente, dirigenteAtualNome, finalizarCulto } = useCulto();
-  const { totalPendentes, totalVisitantes, totalOracoes, totalReunioes, totalGerais } = useAvisos();
-  const [showEncerrarConfirm, setShowEncerrarConfirm] = useState(false);
+  const {
+    avisosPendentes,
+    isCultoEmAndamento,
+    totalVisitantes,
+    totalOracoes,
+    totalReunioes,
+    totalGerais,
+  } = useAvisos();
 
-  const cultoEmAndamento = Boolean(cultoAtivo && cultoAtivo.status === 'em_andamento');
+  const [confirmEndCulto, setConfirmEndCulto] = useState(false);
+
+  const countVisitantes = totalVisitantes;
+  const countOracoes = totalOracoes;
+  const countReunioes = totalReunioes;
+  const countGerais = totalGerais;
+
+  const primeiroNome = currentUser?.nome.split(' ')[0] || 'Irmão(ã)';
+  const cargoLabel = getCargoLabel(currentUser?.cargo);
+
+  const canManageCulto = isDirigente || isAdmin;
+
+  const summaryItems: {
+    tipo: TipoAviso;
+    label: string;
+    count: number;
+    icon: React.ComponentType<{ className?: string }>;
+    iconBg: string;
+  }[] = [
+    {
+      tipo: 'visitante',
+      label: 'Visitantes',
+      count: countVisitantes,
+      icon: UserPlus,
+      iconBg: 'bg-[#03589E] text-white',
+    },
+    {
+      tipo: 'oracao',
+      label: 'Orações',
+      count: countOracoes,
+      icon: HeartHandshake,
+      iconBg: 'bg-[#E85D04] text-white',
+    },
+    {
+      tipo: 'reuniao',
+      label: 'Reuniões',
+      count: countReunioes,
+      icon: Calendar,
+      iconBg: 'bg-emerald-700 text-white',
+    },
+    {
+      tipo: 'geral',
+      label: 'Comunicados',
+      count: countGerais,
+      icon: Megaphone,
+      iconBg: 'bg-[#062552] dark:bg-sky-700 text-white',
+    },
+  ];
+
+  const handleConfirmEnd = () => {
+    const res = finalizarCulto();
+    if (res.success) {
+      setConfirmEndCulto(false);
+    }
+  };
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-3 py-3.5 space-y-4">
-      
-      {/* Saudação e Perfil do Obreiro */}
-      <div className="flex items-center gap-3 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 shadow-xs">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 text-slate-950 font-black text-lg flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
-          {currentUser?.nome.charAt(0) || 'O'}
-        </div>
+    <div className="space-y-4 pb-6">
+      {/* Saudação simples */}
+      <section className="bg-white dark:bg-[#081529] rounded-3xl border border-[#D5E2F0] dark:border-[#1C3559] p-4 shadow-card flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-xs text-amber-600 dark:text-amber-400 font-extrabold uppercase tracking-wider flex items-center gap-1.5 truncate">
-            <span>{getCargoLabel(currentUser?.cargo || 'diacono')}</span>
-            {isAdmin && (
-              <span className="px-1.5 py-0.2 rounded text-[9px] bg-slate-900 dark:bg-slate-800 text-amber-300 font-bold border border-slate-700">
-                ADMIN
+          <h1 className="text-lg sm:text-xl font-extrabold text-[#062552] dark:text-white leading-tight">
+            A paz do Senhor, {primeiroNome}
+          </h1>
+          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+            <span className="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-[#E8F2FC] dark:bg-[#0D1E38] text-[#03589E] dark:text-sky-300 border border-[#D5E2F0] dark:border-[#1C3559]">
+              {cargoLabel}
+            </span>
+            {isDirigente && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold bg-[#FFF4E5] dark:bg-amber-950/60 text-[#9A3412] dark:text-[#FBB016] border border-[#F59E0B]/40">
+                <Crown className="w-3.5 h-3.5" />
+                <span>Dirigente</span>
               </span>
             )}
           </div>
-          <h2 className="font-black text-base sm:text-lg text-slate-900 dark:text-white leading-tight truncate">
-            {currentUser?.nome}
-          </h2>
-          <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
-            IPRA • Igreja Presbiteriana Renovada
-          </div>
         </div>
-      </div>
 
-      {/* CARD PRINCIPAL OPERACIONAL: STATUS DO CULTO */}
-      {cultoEmAndamento && cultoAtivo ? (
-        <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-5 text-white shadow-lg space-y-4 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="w-12 h-12 rounded-2xl bg-white border border-[#D5E2F0] dark:border-[#1C3559] p-1 shrink-0 shadow-sm flex items-center justify-center">
+          <img
+            src="/logo-ipra-emblem.png"
+            alt="IPRA"
+            className="w-full h-full object-contain"
+          />
+        </div>
+      </section>
 
-          <div className="flex items-center justify-between gap-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 text-xs font-black uppercase tracking-wider animate-pulse">
-              <span className="w-2 h-2 rounded-full bg-rose-500" />
-              <span>Culto em Andamento</span>
+      {/* Card do Culto Atual */}
+      {isCultoEmAndamento && cultoAtivo ? (
+        <section className="bg-white dark:bg-[#081529] rounded-3xl border border-[#D5E2F0] dark:border-[#1C3559] p-4 shadow-card space-y-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 text-xs font-bold mb-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Culto ao Vivo</span>
+              </div>
+              <h2 className="text-lg font-extrabold text-[#062552] dark:text-white leading-snug">
+                {cultoAtivo.nomeCulto}
+              </h2>
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-300 mt-0.5">
+                Dirigente: <strong className="text-[#062552] dark:text-white">{dirigenteAtualNome}</strong>
+                {cultoAtivo.horarioInicio ? ` • ${cultoAtivo.horarioInicio}` : ''}
+              </p>
             </div>
 
-            <div className="text-xs text-slate-400 font-medium flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-amber-400" />
-              <span>Iniciado às {cultoAtivo.horarioInicio}</span>
-            </div>
-          </div>
-
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-white leading-tight">
-              {cultoAtivo.nomeCulto}
-            </h1>
-            <div className="flex items-center gap-2 text-xs sm:text-sm text-amber-400 font-bold mt-1">
-              <Crown className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>Dirigente: {dirigenteAtualNome}</span>
-              {isDirigente && (
-                <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-400 text-slate-950 font-black">
-                  VOCÊ
+            {avisosPendentes.length > 0 && (
+              <div className="shrink-0 bg-[#FFF4E5] dark:bg-amber-950/50 border border-[#F59E0B]/50 rounded-2xl px-3 py-2 text-center">
+                <span className="block text-xl font-black text-[#E85D04] dark:text-[#FBB016] leading-none">
+                  {avisosPendentes.length}
                 </span>
-              )}
-            </div>
+                <span className="block text-[11px] font-bold text-[#9A3412] dark:text-[#FCD34D] mt-0.5">
+                  para ler
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* 4 Métricas Rápidas em Tempo Real */}
-          <div className="grid grid-cols-4 gap-2 pt-2 border-t border-slate-800/80">
-            <div className="bg-slate-950/70 border border-slate-800 p-2 rounded-xl text-center">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">Visitantes</div>
-              <div className="text-xl font-black text-white mt-0.5">{totalVisitantes}</div>
-            </div>
-            <div className="bg-slate-950/70 border border-slate-800 p-2 rounded-xl text-center">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-amber-400">Orações</div>
-              <div className="text-xl font-black text-amber-300 mt-0.5">{totalOracoes}</div>
-            </div>
-            <div className="bg-slate-950/70 border border-slate-800 p-2 rounded-xl text-center">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-teal-400">Reuniões</div>
-              <div className="text-xl font-black text-teal-300 mt-0.5">{totalReunioes}</div>
-            </div>
-            <div className="bg-slate-950/70 border border-slate-800 p-2 rounded-xl text-center">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Gerais</div>
-              <div className="text-xl font-black text-blue-300 mt-0.5">{totalGerais}</div>
-            </div>
+          {/* Contadores 2x2 limpos, sem subtítulo e sem corte */}
+          <div className="grid grid-cols-2 gap-2.5">
+            {summaryItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.tipo}
+                  type="button"
+                  onClick={() => onNavigate(canManageCulto ? 'pulpito' : 'diacono', item.tipo)}
+                  className="p-3.5 rounded-2xl border border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] hover:border-[#03589E] text-left transition-all active:scale-[0.98]"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className={`p-2 rounded-xl ${item.iconBg}`}>
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <span className="text-2xl font-black text-[#062552] dark:text-white leading-none">
+                      {item.count}
+                    </span>
+                  </div>
+                  <p className="font-bold text-sm text-[#062552] dark:text-white leading-tight">
+                    {item.label}
+                  </p>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Botões Operacionais Primários — Orientados ao Contexto do Obreiro */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-            {isDirigente ? (
+          {/* Botões principais */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {canManageCulto ? (
               <>
-                {/* Dirigente: Púlpito em destaque primário */}
                 <button
                   type="button"
                   onClick={() => onNavigate('pulpito')}
-                  className="w-full py-3.5 px-4 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-[0.98] text-slate-950 font-black text-sm flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 transition-all touch-target relative"
+                  className="py-3.5 px-4 rounded-2xl bg-[#03589E] hover:bg-[#062552] text-white font-extrabold text-base shadow-md flex items-center justify-center gap-2 transition-all min-h-[52px]"
                 >
-                  <Tv className="w-4 h-4" />
-                  <span>Abrir Púlpito do Altar</span>
-                  {totalPendentes > 0 && (
-                    <span className="px-2 py-0.5 rounded-full text-xs font-black bg-slate-950 text-amber-300 shadow-xs">
-                      {totalPendentes}
-                    </span>
-                  )}
+                  <Mic className="w-5 h-5 shrink-0" />
+                  <span>Abrir Púlpito</span>
                 </button>
-
                 <button
                   type="button"
                   onClick={() => onNavigate('diacono')}
-                  className="w-full py-3.5 px-4 rounded-2xl bg-slate-800 hover:bg-slate-750 active:scale-[0.98] text-white border border-slate-700 font-bold text-sm flex items-center justify-center gap-2 transition-all touch-target"
+                  className="py-3.5 px-4 rounded-2xl border-2 border-[#03589E] text-[#03589E] dark:text-sky-300 dark:border-sky-400 bg-white dark:bg-[#040B16] font-extrabold text-base flex items-center justify-center gap-2 transition-all min-h-[52px]"
                 >
-                  <PenSquare className="w-4 h-4 text-amber-400" />
-                  <span>Anotar Novo Aviso</span>
+                  <PlusCircle className="w-5 h-5 shrink-0" />
+                  <span>Enviar Aviso</span>
                 </button>
               </>
             ) : (
               <>
-                {/* Diaconia / Recepção / Admin não dirigente: Anotação como ação primária */}
                 <button
                   type="button"
                   onClick={() => onNavigate('diacono')}
-                  className="w-full py-3.5 px-4 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-[0.98] text-slate-950 font-black text-sm flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 transition-all touch-target"
+                  className="py-3.5 px-4 rounded-2xl bg-[#03589E] hover:bg-[#062552] text-white font-extrabold text-base shadow-md flex items-center justify-center gap-2 transition-all min-h-[52px]"
                 >
-                  <PenSquare className="w-4 h-4" />
-                  <span>Anotar Novo Aviso</span>
+                  <PlusCircle className="w-5 h-5 shrink-0" />
+                  <span>Enviar Aviso</span>
                 </button>
-
                 <button
                   type="button"
                   onClick={() => onNavigate('pulpito')}
-                  className="w-full py-3.5 px-4 rounded-2xl bg-slate-800 hover:bg-slate-750 active:scale-[0.98] text-white border border-slate-700 font-bold text-sm flex items-center justify-center gap-2 transition-all touch-target relative"
+                  className="py-3.5 px-4 rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#062552] dark:text-white font-bold text-base flex items-center justify-center gap-2 transition-all min-h-[52px]"
                 >
-                  <Tv className="w-4 h-4 text-amber-400" />
-                  <span>Abrir Púlpito do Altar</span>
-                  {totalPendentes > 0 && (
-                    <span className="px-2 py-0.5 rounded-full text-xs font-black bg-rose-500 text-white shadow-xs">
-                      {totalPendentes}
-                    </span>
-                  )}
+                  <Mic className="w-5 h-5 text-[#03589E] dark:text-sky-400 shrink-0" />
+                  <span>Ver Púlpito</span>
                 </button>
               </>
             )}
           </div>
-
-          {/* Encerrar Culto — apenas dirigente ou administrador */}
-          {(isAdmin || isDirigente) && (
-            !showEncerrarConfirm ? (
-              <button
-                type="button"
-                onClick={() => setShowEncerrarConfirm(true)}
-                className="w-full py-2 text-center text-xs text-slate-400 hover:text-rose-400 font-semibold transition-colors flex items-center justify-center gap-1.5"
-              >
-                <Flag className="w-3.5 h-3.5" />
-                <span>Concluir sessão deste culto</span>
-              </button>
-            ) : (
-              <div className="bg-rose-950/60 border border-rose-800 rounded-2xl p-3.5 space-y-2.5 animate-in fade-in">
-                <div className="text-xs text-rose-200 font-bold text-center">
-                  Deseja realmente encerrar a transmissão deste culto?
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowEncerrarConfirm(false)}
-                    className="flex-1 py-2 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 text-xs font-bold"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      finalizarCulto();
-                      setShowEncerrarConfirm(false);
-                    }}
-                    className="flex-1 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black shadow-md shadow-rose-600/20"
-                  >
-                    Confirmar Encerramento
-                  </button>
-                </div>
-              </div>
-            )
-          )}
-
-        </div>
+        </section>
       ) : (
-        <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-6 text-white shadow-lg text-center space-y-4">
-          <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto shadow-inner">
-            <Radio className="w-8 h-8" />
+        <section className="bg-white dark:bg-[#081529] rounded-3xl border border-[#D5E2F0] dark:border-[#1C3559] p-6 text-center shadow-card space-y-4">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-[#E8F2FC] dark:bg-[#0D1E38] flex items-center justify-center border border-[#D5E2F0] dark:border-[#1C3559]">
+            <Church className="w-8 h-8 text-[#03589E] dark:text-[#60A5FA]" />
           </div>
-
-          <div className="space-y-1">
-            <h1 className="text-xl sm:text-2xl font-black text-white">
-              Nenhum Culto Ativo
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-400 max-w-sm mx-auto leading-relaxed">
-              {isAdmin 
-                ? 'Inicie um novo culto para que os diáconos possam transmitir visitantes e pedidos de oração em tempo real para o púlpito.'
-                : 'Aguarde o pastor ou dirigente iniciar o culto para começar a anotação de avisos.'}
+          <div>
+            <h2 className="text-lg font-extrabold text-[#062552] dark:text-white">
+              Nenhum culto aberto
+            </h2>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
+              {isAdmin
+                ? 'Inicie o culto para receber e ler avisos.'
+                : 'Aguarde a abertura do culto para enviar avisos.'}
             </p>
           </div>
-
           {isAdmin ? (
             <button
               type="button"
               onClick={onOpenIniciarCulto}
-              className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-[0.98] text-slate-950 font-black text-base flex items-center justify-center gap-2.5 shadow-lg shadow-amber-500/20 transition-all touch-target"
+              className="w-full py-3.5 px-5 rounded-2xl bg-[#03589E] hover:bg-[#062552] text-white font-extrabold text-base shadow-md flex items-center justify-center gap-2 transition-all min-h-[52px]"
             >
-              <Play className="w-5 h-5 fill-slate-950" />
-              <span>Iniciar Novo Culto Agora</span>
+              <Church className="w-5 h-5 shrink-0" />
+              <span>Iniciar Culto</span>
             </button>
           ) : (
-            <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-2xl text-xs text-slate-400">
-              Apenas administradores podem iniciar uma nova sessão de culto.
-            </div>
+            <button
+              type="button"
+              onClick={() => onNavigate('historico')}
+              className="w-full py-3.5 px-5 rounded-2xl bg-[#F4F7FB] dark:bg-[#040B16] border border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-white font-bold text-base flex items-center justify-center gap-2 min-h-[52px]"
+            >
+              <History className="w-5 h-5 text-[#03589E]" />
+              <span>Ver Histórico</span>
+            </button>
           )}
-        </div>
+        </section>
       )}
 
+      {/* Ações secundárias */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <button
+          type="button"
+          onClick={() => onNavigate('historico')}
+          className="p-4 rounded-2xl bg-white dark:bg-[#081529] border border-[#D5E2F0] dark:border-[#1C3559] hover:border-[#03589E] flex items-center justify-between gap-3 text-left shadow-subtle min-h-[56px]"
+        >
+          <span className="flex items-center gap-2.5 font-bold text-sm text-[#062552] dark:text-white">
+            <History className="w-5 h-5 text-[#03589E] dark:text-sky-400 shrink-0" />
+            <span>Histórico de Cultos</span>
+          </span>
+          <ArrowRight className="w-4 h-4 text-slate-400 shrink-0" />
+        </button>
+
+        {isCultoEmAndamento && cultoAtivo && canManageCulto && (
+          <button
+            type="button"
+            onClick={() => setConfirmEndCulto(true)}
+            className="p-4 rounded-2xl bg-white dark:bg-[#081529] border border-[#D5E2F0] dark:border-[#1C3559] hover:border-rose-400 flex items-center justify-between gap-3 text-left shadow-subtle min-h-[56px]"
+          >
+            <span className="flex items-center gap-2.5 font-bold text-sm text-rose-700 dark:text-rose-400">
+              <Flag className="w-5 h-5 shrink-0" />
+              <span>Encerrar Culto</span>
+            </span>
+            <ArrowRight className="w-4 h-4 text-rose-400 shrink-0" />
+          </button>
+        )}
+      </section>
+
+      {/* Confirmação de encerramento */}
+      {confirmEndCulto && (
+        <section className="p-4 rounded-3xl bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-300 dark:border-rose-700 space-y-3">
+          <div className="flex items-start gap-2.5 text-rose-900 dark:text-rose-100">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-extrabold">Encerrar culto agora?</p>
+              {avisosPendentes.length > 0 && (
+                <p className="mt-0.5 font-medium">
+                  Ainda há {avisosPendentes.length} aviso(s) para ler.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              type="button"
+              onClick={() => setConfirmEndCulto(false)}
+              className="py-3 px-4 rounded-2xl bg-white dark:bg-[#081529] border border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-white font-bold text-sm min-h-[46px]"
+            >
+              Continuar
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmEnd}
+              className="py-3 px-4 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-sm min-h-[46px]"
+            >
+              Encerrar
+            </button>
+          </div>
+        </section>
+      )}
     </div>
   );
 };

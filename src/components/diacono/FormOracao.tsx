@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { Send, CheckCircle2 } from 'lucide-react';
+import { Send, CheckCircle2, Heart, AlertTriangle, Check } from 'lucide-react';
 import { useAvisos } from '../../context/AvisosContext';
 import type { CategoriaOracao } from '../../types';
 
-const CATEGORIAS_ORACAO: { id: CategoriaOracao; label: string; desc: string }[] = [
-  { id: 'saude', label: 'Saúde & Tratamento', desc: 'Enfermidades e cirurgias' },
-  { id: 'familia', label: 'Família & Lar', desc: 'Casamento e filhos' },
-  { id: 'causas', label: 'Trabalho & Causas', desc: 'Emprego e causas' },
-  { id: 'espiritual', label: 'Vida Espiritual', desc: 'Libertação e fé' },
-  { id: 'agradecimento', label: 'Ação de Graças', desc: 'Vitória alcançada' },
-  { id: 'luto', label: 'Consolo no Luto', desc: 'Família enlutada' },
-  { id: 'outro', label: 'Outro Motivo', desc: 'Pedido geral' },
+const CATEGORIAS_ORACAO: { id: CategoriaOracao; label: string }[] = [
+  { id: 'saude', label: 'Saúde e Cirurgia' },
+  { id: 'familia', label: 'Família e Lar' },
+  { id: 'causas', label: 'Trabalho e Causas' },
+  { id: 'espiritual', label: 'Vida Espiritual' },
+  { id: 'agradecimento', label: 'Agradecimento' },
+  { id: 'luto', label: 'Consolo no Luto' },
+  { id: 'outro', label: 'Outro Motivo' },
 ];
 
 export const FormOracao: React.FC = () => {
@@ -37,7 +37,7 @@ export const FormOracao: React.FC = () => {
     });
 
     setShowSuccessToast(true);
-    setTimeout(() => setShowSuccessToast(false), 3000);
+    setTimeout(() => setShowSuccessToast(false), 4000);
 
     setNomePessoa('');
     setMotivo('');
@@ -45,56 +45,51 @@ export const FormOracao: React.FC = () => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200/80 dark:border-slate-800 space-y-4 w-full max-w-full overflow-hidden transition-surface">
-      
-      {/* Banner de Sucesso */}
-      {showSuccessToast && (
-        <div className="bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 px-3.5 py-2.5 rounded-xl flex items-center gap-2 animate-in fade-in zoom-in-95 duration-150 shadow-xs">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <span className="text-xs font-bold">
-            Pedido de oração transmitido ao Púlpito com sucesso!
-          </span>
-        </div>
-      )}
-
+    <form onSubmit={handleSubmit} className="space-y-4 w-full">
       {/* 1. Nome da Pessoa ou Família */}
       <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-          Nome da Pessoa ou Família: <span className="text-rose-500">*</span>
+        <label
+          htmlFor="ora-nome"
+          className="flex items-center gap-1.5 text-sm font-extrabold text-[#062552] dark:text-white mb-1.5"
+        >
+          <Heart className="w-4 h-4 text-[#E85D04] dark:text-[#FBB016]" />
+          <span>Nome da Pessoa ou Família <span className="text-rose-600">*</span></span>
         </label>
         <input
+          id="ora-nome"
           type="text"
           required
           value={nomePessoa}
           onChange={(e) => setNomePessoa(e.target.value)}
-          placeholder="Ex: Dona Antônia (Mãe da irmã Lúcia)"
-          className="w-full px-3.5 py-3 text-sm sm:text-base rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-950 focus:border-amber-500 dark:focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 focus:outline-none transition-all"
+          placeholder="Ex: Dona Antônia"
+          className="w-full px-4 py-3.5 text-base rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-[#040B16] focus:border-[#E85D04] focus:ring-2 focus:ring-[#E85D04]/20 focus:outline-none transition-all"
         />
       </div>
 
-      {/* 2. Categoria do Pedido */}
+      {/* 2. Motivo da Oração */}
       <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-          Motivo da Intercessão:
+        <label className="block text-sm font-extrabold text-[#062552] dark:text-white mb-1.5">
+          Tipo do Pedido
         </label>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 no-swipe" data-no-swipe="true">
-          {CATEGORIAS_ORACAO.map((cat) => {
+        <div className="grid grid-cols-2 gap-2">
+          {CATEGORIAS_ORACAO.map((cat, idx) => {
             const isSelected = categoria === cat.id;
+            const spanLast =
+              idx === CATEGORIAS_ORACAO.length - 1 && CATEGORIAS_ORACAO.length % 2 === 1
+                ? 'col-span-2'
+                : '';
             return (
               <button
                 key={cat.id}
                 type="button"
                 onClick={() => setCategoria(cat.id)}
-                className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all truncate ${
+                className={`py-3 px-3 rounded-xl border-2 text-center text-sm font-bold transition-all min-h-[48px] ${spanLast} ${
                   isSelected
-                    ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-400 dark:border-amber-600 text-amber-950 dark:text-amber-200 font-bold shadow-xs ring-1 ring-amber-400/40'
-                    : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 hover:border-slate-300'
+                    ? 'bg-[#E85D04] border-[#E85D04] text-white shadow-sm'
+                    : 'bg-[#F4F7FB] dark:bg-[#040B16] border-[#D5E2F0] dark:border-[#1C3559] text-[#0D213A] dark:text-slate-200 hover:border-[#E85D04]'
                 }`}
               >
-                <div className="text-xs sm:text-sm font-bold leading-tight truncate">{cat.label}</div>
-                <div className={`text-[11px] font-medium mt-0.5 truncate ${isSelected ? 'text-amber-800 dark:text-amber-300' : 'text-slate-400'}`}>
-                  {cat.desc}
-                </div>
+                {cat.label}
               </button>
             );
           })}
@@ -103,50 +98,74 @@ export const FormOracao: React.FC = () => {
 
       {/* 3. Detalhes */}
       <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-          Detalhes do Pedido:
+        <label
+          htmlFor="ora-motivo"
+          className="block text-sm font-extrabold text-[#062552] dark:text-white mb-1.5"
+        >
+          Explicação do Pedido (Opcional)
         </label>
         <textarea
+          id="ora-motivo"
           rows={3}
           value={motivo}
           onChange={(e) => setMotivo(e.target.value)}
-          placeholder="Ex: Realizará exames na Santa Casa nesta semana. Pedem a oração de toda a igreja."
-          className="w-full px-3.5 py-3 text-sm sm:text-base rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-950 focus:border-amber-500 dark:focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 focus:outline-none transition-all"
+          placeholder="Ex: Fará exames na Santa Casa nesta semana."
+          className="w-full px-4 py-3.5 text-base rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-[#040B16] focus:border-[#E85D04] focus:ring-2 focus:ring-[#E85D04]/20 focus:outline-none transition-all"
         />
       </div>
 
-      {/* 4. Destaque / Urgência */}
-      <div className={`border rounded-2xl p-3.5 transition-all ${
-        urgente 
-          ? 'bg-rose-50/80 border-rose-300 dark:bg-rose-950/40 dark:border-rose-800 ring-1 ring-rose-400/30' 
-          : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800'
-      }`}>
-        <label className="flex items-start gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={urgente}
-            onChange={(e) => setUrgente(e.target.checked)}
-            className="mt-1 w-4 h-4 rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-rose-600 focus:ring-rose-500 shrink-0"
-          />
-          <div>
-            <div className={`text-sm font-bold flex items-center gap-2 ${urgente ? 'text-rose-700 dark:text-rose-300' : 'text-slate-800 dark:text-slate-200'}`}>
-              <span>Orar com prioridade no Púlpito</span>
-              {urgente && <span className="px-2 py-0.5 rounded text-[9px] bg-rose-600 text-white font-extrabold uppercase tracking-wide">Urgente</span>}
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal mt-0.5">
-              Sinaliza este pedido com destaque visual no momento de oração congregacional.
-            </p>
+      {/* 4. Destaque / Urgência como botão grande e fácil de tocar */}
+      <button
+        type="button"
+        onClick={() => setUrgente(!urgente)}
+        className={`w-full text-left border-2 rounded-2xl p-4 flex items-start gap-3 transition-all min-h-[60px] ${
+          urgente
+            ? 'bg-rose-50 dark:bg-rose-950/50 border-rose-500 ring-2 ring-rose-500/20'
+            : 'bg-[#F4F7FB] dark:bg-[#040B16] border-[#D5E2F0] dark:border-[#1C3559]'
+        }`}
+      >
+        <div
+          className={`mt-0.5 w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 ${
+            urgente
+              ? 'bg-rose-600 border-rose-600 text-white'
+              : 'bg-white dark:bg-[#081529] border-slate-400'
+          }`}
+        >
+          {urgente && <Check className="w-4 h-4 stroke-[3]" />}
+        </div>
+        <div className="min-w-0">
+          <div className={`text-sm sm:text-base font-extrabold flex flex-wrap items-center gap-2 ${
+            urgente ? 'text-rose-800 dark:text-rose-200' : 'text-[#062552] dark:text-white'
+          }`}>
+            <AlertTriangle className={`w-4 h-4 shrink-0 ${urgente ? 'text-rose-600 dark:text-rose-400' : 'text-[#E85D04]'}`} />
+            <span>Pedido Urgente</span>
           </div>
-        </label>
-      </div>
+          <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-snug">
+            Destaca no topo para o pastor.
+          </p>
+        </div>
+      </button>
+
+      {/* Confirmação visível junto ao botão */}
+      {showSuccessToast && (
+        <div
+          role="status"
+          className="bg-emerald-50 dark:bg-emerald-950/70 border-2 border-emerald-500 text-emerald-900 dark:text-emerald-200 px-4 py-3.5 rounded-2xl flex items-center gap-2.5 shadow-sm"
+        >
+          <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <span className="text-sm sm:text-base font-extrabold">
+            Pedido de oração enviado.
+          </span>
+        </div>
+      )}
 
       {/* Botão de Envio */}
       <button
         type="submit"
-        className="w-full py-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-[0.99] text-slate-950 font-black text-sm sm:text-base shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-all touch-target"
+        className="w-full py-4 px-5 rounded-2xl bg-[#E85D04] hover:bg-[#D45000] active:scale-[0.99] text-white font-extrabold text-base shadow-md flex items-center justify-center gap-2 transition-all min-h-[54px]"
       >
-        <Send className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-        <span>Transmitir Pedido de Oração</span>
+        <Send className="w-5 h-5 shrink-0" />
+        <span>Enviar Oração</span>
       </button>
     </form>
   );

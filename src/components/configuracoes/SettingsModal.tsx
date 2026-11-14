@@ -1,27 +1,31 @@
 import React, { useState } from 'react';
-import { 
-  X, 
-  Crown, 
-  LogOut, 
-  Volume2, 
-  VolumeX, 
-  Moon, 
-  Sun, 
-  Download, 
-  Smartphone, 
-  Check, 
-  Plus, 
-  UserCheck, 
+import {
+  X,
+  Crown,
+  LogOut,
+  Volume2,
+  VolumeX,
+  Moon,
+  Sun,
+  Download,
+  Smartphone,
+  Check,
+  Plus,
+  UserCheck,
   SlidersHorizontal,
   Package,
   KeyRound,
   ShieldCheck,
   Users,
-  Cpu
+  Cpu,
+  Eye,
+  EyeOff,
+  Type,
+  AlertCircle,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCulto } from '../../context/CultoContext';
-import { useAccessibility } from '../../context/AccessibilityContext';
+import { useAccessibility, FONT_SCALES } from '../../context/AccessibilityContext';
 import { storageService } from '../../services/storageService';
 import { getCargoLabel } from '../../utils/formatters';
 import type { CargoObreiro } from '../../types';
@@ -31,45 +35,45 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
+const FONT_LABELS: Record<number, { label: string; desc: string }> = {
+  1.0: { label: 'Padrão', desc: '100%' },
+  1.25: { label: 'Grande', desc: '125%' },
+};
+
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-  const { 
-    currentUser, 
-    logout, 
-    obreiros, 
-    addObreiro, 
-    updateAdminPin, 
-    configureMigrationPin, 
-    importarObreirosOficiais, 
-    hasPinConfigured, 
-    isAdmin, 
+  const {
+    currentUser,
+    logout,
+    obreiros,
+    addObreiro,
+    updateAdminPin,
+    importarObreirosOficiais,
+    isAdmin,
     isMaster,
     verifyObreiroPin,
-    setObreiroPin 
+    setObreiroPin,
   } = useAuth();
   const { cultoAtivo, dirigenteAtualNome, definirDirigente } = useCulto();
-  const { 
-    isPulpitMode, 
-    setIsPulpitMode, 
-    soundEnabled, 
+  const {
+    isPulpitMode,
+    setIsPulpitMode,
+    soundEnabled,
     setSoundEnabled,
     fontScale,
-    increaseFontSize,
-    decreaseFontSize,
-    resetFontSize,
+    setFontScale,
     isInstalled,
-    promptInstall
+    canInstall,
+    promptInstall,
   } = useAccessibility();
 
-  // Seletor principal: 'preferencias' (comum) vs 'admin' (exclusivo para administradores)
   const [mainTab, setMainTab] = useState<'preferencias' | 'admin'>('preferencias');
-  // Subseções dentro do painel administrativo
   const [adminSection, setAdminSection] = useState<'dirigente' | 'obreiros' | 'seguranca' | 'nuvem'>('dirigente');
 
   // Troca de dirigente
   const [selectedDirigenteId, setSelectedDirigenteId] = useState(cultoAtivo?.dirigenteId || '');
-  const [dirigenteSuccess, setDirigenteSuccess] = useState('');
+  const [dirigenteFeedback, setDirigenteFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  // Novo obreiro (Unificado por Cargo e Gênero)
+  // Novo obreiro
   type CargoUnificado = 'pastor' | 'pastor_auxiliar' | 'presbitero' | 'diacono' | 'evangelista' | 'missionario';
   const [showAddObreiro, setShowAddObreiro] = useState(false);
   const [nome, setNome] = useState('');
@@ -79,29 +83,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [obreiroError, setObreiroError] = useState('');
   const [obreiroSuccess, setObreiroSuccess] = useState('');
 
-  // Alterar minha própria senha
+  // Minha senha pessoal
   const [minhaSenhaAtual, setMinhaSenhaAtual] = useState('');
   const [minhaNovaSenha, setMinhaNovaSenha] = useState('');
   const [minhaConfirmarSenha, setMinhaConfirmarSenha] = useState('');
+  const [showMinhasSenhas, setShowMinhasSenhas] = useState(false);
   const [minhaSenhaSuccess, setMinhaSenhaSuccess] = useState('');
   const [minhaSenhaError, setMinhaSenhaError] = useState('');
 
-  // Alterar PIN / Configurar PIN inicial (Admin Master)
+  // PIN Administrativo
   const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin] = useState('');
-  const [confirmPin, setConfirmPin] = useState('');
   const [pinSuccess, setPinSuccess] = useState('');
   const [pinError, setPinError] = useState('');
 
-  // Firebase / Sistema Avançado
+  // Firebase
   const [firebaseJson, setFirebaseJson] = useState(() => {
     const cfg = storageService.getFirebaseConfig();
     return cfg ? JSON.stringify(cfg, null, 2) : '';
   });
   const [firebaseSaved, setFirebaseSaved] = useState(false);
+  const [firebaseError, setFirebaseError] = useState('');
   const [importMsg, setImportMsg] = useState('');
 
   if (!isOpen) return null;
+
+  const inputClass =
+    'w-full px-4 py-3 text-base rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] text-[#0D213A] dark:text-white focus:bg-white dark:focus:bg-[#040B16] focus:border-[#03589E] focus:outline-none';
 
   const handleCargoUnificadoChange = (val: CargoUnificado) => {
     setCargoUnificado(val);
@@ -114,12 +122,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     e.preventDefault();
     const target = obreiros.find((o) => o.id === selectedDirigenteId);
     if (!target) return;
-    const result = definirDirigente(target);
+    const result = definirDirigente(target, undefined, currentUser || undefined);
     if (result.success) {
-      setDirigenteSuccess(`Dirigente alterado para ${target.nome}.`);
-      setTimeout(() => setDirigenteSuccess(''), 3000);
+      setDirigenteFeedback({ ok: true, msg: `Dirigente alterado para ${target.nome}.` });
+      setTimeout(() => setDirigenteFeedback(null), 3000);
     } else {
-      setDirigenteSuccess(`Erro: ${result.message || 'Não foi possível alterar o dirigente.'}`);
+      setDirigenteFeedback({
+        ok: false,
+        msg: result.message || 'Não foi possível alterar o dirigente.',
+      });
     }
   };
 
@@ -184,7 +195,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     if (!currentUser) return;
 
     if (!verifyObreiroPin(currentUser.id, minhaSenhaAtual)) {
-      setMinhaSenhaError('A senha atual informada está incorreta (senha padrão: 1234).');
+      setMinhaSenhaError('A senha atual informada está incorreta.');
       return;
     }
 
@@ -216,38 +227,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     setTimeout(() => setImportMsg(''), 4500);
   };
 
-  const handleConfigureInitialPin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setPinError('');
-    setPinSuccess('');
-    if (!newPin || !/^\d{4,}$/.test(newPin.trim())) {
-      setPinError('O PIN administrativo deve conter apenas números e pelo menos 4 dígitos.');
-      return;
-    }
-    if (newPin !== confirmPin) {
-      setPinError('Os PINs digitados não coincidem.');
-      return;
-    }
-    const res = configureMigrationPin(newPin);
-    if (res.success) {
-      setPinSuccess('PIN administrativo configurado com sucesso.');
-      setNewPin('');
-      setConfirmPin('');
-      setTimeout(() => setPinSuccess(''), 3000);
-    } else {
-      setPinError(res.message || 'Não foi possível configurar o PIN.');
-    }
-  };
-
   const handleUpdatePin = (e: React.FormEvent) => {
     e.preventDefault();
     setPinError('');
     setPinSuccess('');
     if (!currentPin || !newPin) {
-      setPinError('Preencha os campos.');
+      setPinError('Preencha todos os campos.');
       return;
     }
-    if (!newPin || !/^\d{4,}$/.test(newPin.trim())) {
+    if (!/^\d{4,}$/.test(newPin.trim())) {
       setPinError('A nova senha deve conter apenas números e pelo menos 4 dígitos.');
       return;
     }
@@ -263,32 +251,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
   const handleSaveFirebase = (e: React.FormEvent) => {
     e.preventDefault();
+    setFirebaseError('');
+    setFirebaseSaved(false);
     try {
       const parsed = JSON.parse(firebaseJson);
       storageService.saveFirebaseConfig(parsed);
       setFirebaseSaved(true);
       setTimeout(() => setFirebaseSaved(false), 3000);
     } catch {
-      alert('Formato JSON inválido.');
+      setFirebaseError('Formato JSON inválido. Verifique se copiou todas as chaves corretamente.');
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-        
-        {/* Cabeçalho do Modal */}
-        <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/50 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center shadow-inner">
-              <SlidersHorizontal className="w-4 h-4" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#040B16]/75 backdrop-blur-sm">
+      <div className="bg-white dark:bg-[#081529] border-2 border-[#D5E2F0] dark:border-[#1C3559] rounded-3xl w-full max-w-xl h-[88vh] max-h-[760px] flex flex-col shadow-2xl overflow-hidden">
+        {/* Cabeçalho IPRB */}
+        <div className="bg-gradient-to-r from-[#062552] to-[#03589E] px-5 py-4 text-white flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/15 rounded-xl">
+              <SlidersHorizontal className="w-5 h-5 text-[#FBB016]" />
             </div>
             <div>
-              <h2 className="font-black text-sm sm:text-base text-slate-900 dark:text-white leading-tight">
-                Ajustes & Sistema
+              <h2 className="font-extrabold text-base sm:text-lg leading-tight">
+                Ajustes
               </h2>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                {isAdmin ? 'Preferências pessoais e administração' : 'Preferências pessoais e acessibilidade'}
+              <p className="text-xs text-[#E8F2FC]">
+                {isAdmin ? 'Preferências e administração' : 'Fonte, som, tema e senha'}
               </p>
             </div>
           </div>
@@ -296,578 +285,484 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-xl bg-slate-200/70 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition-colors"
+            className="p-2 rounded-xl bg-white/15 hover:bg-white/25 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+            aria-label="Fechar ajustes"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Seletor Principal de Área (Preferências vs Administração) */}
+        {/* Seletor Principal (Admins) */}
         {isAdmin && (
-          <div className="p-2 border-b border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950 shrink-0">
-            <div className="grid grid-cols-2 gap-1.5 bg-slate-200/70 dark:bg-slate-900 p-1 rounded-2xl">
+          <div className="p-3 border-b border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] shrink-0">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setMainTab('preferencias')}
-                className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                className={`py-2.5 px-3 rounded-2xl text-sm font-extrabold border-2 transition-all min-h-[46px] ${
                   mainTab === 'preferencias'
-                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-black'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    ? 'bg-[#03589E] border-[#03589E] text-white shadow-sm'
+                    : 'bg-white dark:bg-[#081529] border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-slate-300'
                 }`}
               >
-                <Smartphone className="w-3.5 h-3.5" />
-                <span>Preferências do Uso</span>
+                Preferências
               </button>
-
               <button
                 type="button"
                 onClick={() => setMainTab('admin')}
-                className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                className={`py-2.5 px-3 rounded-2xl text-xs sm:text-sm font-extrabold border-2 transition-all flex items-center justify-center gap-1.5 min-h-[46px] ${
                   mainTab === 'admin'
-                    ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    ? 'bg-[#E85D04] border-[#E85D04] text-white shadow-sm'
+                    : 'bg-white dark:bg-[#081529] border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-slate-300'
                 }`}
               >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Painel Administrativo</span>
+                <ShieldCheck className="w-4 h-4" />
+                <span>Administração</span>
               </button>
             </div>
           </div>
         )}
 
-        {/* Sub-seletor do Painel Administrativo */}
-        {isAdmin && mainTab === 'admin' && (
-          <div className="flex items-center gap-1 px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 overflow-x-auto no-scrollbar shrink-0">
-            {[
-              { id: 'dirigente', label: 'Dirigente', icon: <Crown className="w-3 h-3" /> },
-              { id: 'obreiros', label: 'Obreiros', icon: <Users className="w-3 h-3" /> },
-              { id: 'seguranca', label: 'Segurança & PIN', icon: <KeyRound className="w-3 h-3" /> },
-              { id: 'nuvem', label: 'Sistema Avançado', icon: <Cpu className="w-3 h-3" /> },
-            ].map((tab) => {
-              const isActive = adminSection === tab.id;
-              return (
+        {/* Corpo com Rolagem */}
+        <div className="p-5 overflow-y-auto space-y-6 flex-1">
+          {mainTab === 'preferencias' ? (
+            <>
+              {/* Identificação do Obreiro */}
+              {currentUser && (
+                <div className="p-4 rounded-2xl bg-[#F4F7FB] dark:bg-[#040B16] border-2 border-[#D5E2F0] dark:border-[#1C3559] flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Conectado como
+                    </p>
+                    <p className="text-base font-extrabold text-[#062552] dark:text-white truncate">
+                      {currentUser.nome}
+                    </p>
+                    <p className="text-xs font-bold text-[#03589E] dark:text-[#60A5FA]">
+                      {getCargoLabel(currentUser.cargo)}
+                      {isAdmin && currentUser.cargo !== 'admin' ? ' • Administrador' : ''}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      logout();
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-200 text-xs font-extrabold flex items-center gap-1.5 hover:bg-rose-100 min-h-[44px]"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Sair</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Tamanho da Letra Global (Padrão 100% e Grande 125%) */}
+              <section className="space-y-3 bg-[#F4F7FB] dark:bg-[#040B16] p-4 rounded-2xl border border-[#D5E2F0] dark:border-[#1C3559]">
+                <div className="flex items-center gap-2">
+                  <Type className="w-5 h-5 text-[#03589E] dark:text-[#60A5FA] shrink-0" />
+                  <h3 className="text-sm font-extrabold text-[#062552] dark:text-white">
+                    Tamanho da Letra
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {FONT_SCALES.map((scale) => {
+                    const info = FONT_LABELS[scale] || { label: `${Math.round(scale * 100)}%`, desc: '' };
+                    const selected = Math.abs(fontScale - scale) < 0.05;
+                    return (
+                      <button
+                        key={scale}
+                        type="button"
+                        onClick={() => setFontScale(scale)}
+                        className={`py-3.5 px-3 rounded-2xl border-2 text-center transition-all min-h-[64px] flex flex-col items-center justify-center gap-0.5 ${
+                          selected
+                            ? 'bg-[#03589E] border-[#03589E] text-white shadow-sm'
+                            : 'bg-white dark:bg-[#081529] border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-slate-200'
+                        }`}
+                      >
+                        <span className="text-sm font-extrabold leading-tight">{info.label}</span>
+                        <span className="text-xs opacity-85 font-bold">{info.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="p-3 rounded-xl bg-white dark:bg-[#081529] border border-[#D5E2F0] dark:border-[#1C3559]">
+                  <p className="text-sm font-bold text-[#062552] dark:text-white leading-snug">
+                    Exemplo: Irmã Maria — veio de Campinas.
+                  </p>
+                </div>
+              </section>
+
+              {/* Aparência e Sons */}
+              <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
-                  key={tab.id}
                   type="button"
-                  onClick={() => setAdminSection(tab.id as any)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
-                    isActive
-                      ? 'bg-slate-900 text-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border dark:border-amber-500/40 shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+                  onClick={() => setIsPulpitMode(!isPulpitMode)}
+                  className={`p-4 rounded-2xl border-2 text-left transition-all flex items-center justify-between gap-3 min-h-[64px] ${
+                    isPulpitMode
+                      ? 'bg-[#040B16] border-[#FBB016] text-white'
+                      : 'bg-white dark:bg-[#081529] border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-white'
                   }`}
                 >
-                  {tab.icon}
-                  <span>{tab.label}</span>
+                  <div className="flex items-center gap-3">
+                    {isPulpitMode ? (
+                      <Moon className="w-5 h-5 text-[#FBB016] shrink-0" />
+                    ) : (
+                      <Sun className="w-5 h-5 text-[#E85D04] shrink-0" />
+                    )}
+                    <div>
+                      <p className="font-extrabold text-sm">Tema</p>
+                      <p className="text-xs opacity-75">
+                        {isPulpitMode ? 'Escuro' : 'Claro'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-[#E8F2FC] dark:bg-[#1C3559] text-[#03589E] dark:text-white">
+                    Trocar
+                  </span>
                 </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Conteúdo com Rolagem */}
-        <div className="p-5 overflow-y-auto space-y-4 flex-1">
-          
-          {/* SEÇÃO 1: PREFERÊNCIAS DO USO & IDENTIFICAÇÃO */}
-          {(mainTab === 'preferencias' || !isAdmin) && (
-            <div className="space-y-4">
-              
-              {/* Card de Identificação do Obreiro */}
-              <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-11 h-11 rounded-xl bg-amber-500 text-slate-950 font-black text-base flex items-center justify-center shrink-0 shadow-xs">
-                    {currentUser?.nome.charAt(0)}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs text-amber-600 dark:text-amber-400 font-black uppercase tracking-wider flex items-center gap-1.5">
-                      <span>{getCargoLabel(currentUser?.cargo || 'diacono')}</span>
-                      {isAdmin && (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] bg-slate-900 dark:bg-slate-800 text-amber-300 font-bold border border-slate-700">
-                          ADMIN
-                        </span>
-                      )}
-                    </div>
-                    <div className="font-extrabold text-sm text-slate-900 dark:text-white truncate">
-                      {currentUser?.nome}
-                    </div>
-                  </div>
-                </div>
 
                 <button
                   type="button"
-                  onClick={() => {
-                    logout();
-                    onClose();
-                  }}
-                  className="px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 hover:bg-rose-100 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0"
+                  onClick={() => setSoundEnabled(!soundEnabled)}
+                  className={`p-4 rounded-2xl border-2 text-left transition-all flex items-center justify-between gap-3 min-h-[64px] ${
+                    soundEnabled
+                      ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400 dark:border-emerald-700 text-emerald-950 dark:text-emerald-100'
+                      : 'bg-[#F4F7FB] dark:bg-[#040B16] border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-slate-300'
+                  }`}
                 >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Sair / Trocar</span>
+                  <div className="flex items-center gap-3">
+                    {soundEnabled ? (
+                      <Volume2 className="w-5 h-5 text-emerald-700 dark:text-emerald-400 shrink-0" />
+                    ) : (
+                      <VolumeX className="w-5 h-5 text-slate-400 shrink-0" />
+                    )}
+                    <div>
+                      <p className="font-extrabold text-sm">Sons de Aviso</p>
+                      <p className="text-xs opacity-75">{soundEnabled ? 'Ativado' : 'Mudo'}</p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-white dark:bg-[#081529] border border-current/20">
+                    {soundEnabled ? 'Ligado' : 'Desligado'}
+                  </span>
                 </button>
-              </div>
+              </section>
 
-              {/* Ajustes de Acessibilidade & Aparelho */}
-              <div className="space-y-2.5">
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Preferências do Aparelho
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {/* Som */}
-                  <button
-                    type="button"
-                    onClick={() => setSoundEnabled(!soundEnabled)}
-                    className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex items-center justify-between gap-2 hover:border-amber-400/50 transition-all text-left"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      {soundEnabled ? (
-                        <Volume2 className="w-5 h-5 text-emerald-500" />
-                      ) : (
-                        <VolumeX className="w-5 h-5 text-slate-400" />
-                      )}
-                      <div>
-                        <div className="text-xs font-bold text-slate-900 dark:text-white">Alerta Sonoro</div>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                          {soundEnabled ? 'Ativado ao receber aviso' : 'Silenciado'}
-                        </div>
-                      </div>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold ${
-                      soundEnabled ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
-                    }`}>
-                      {soundEnabled ? 'LIGADO' : 'DESLIGADO'}
-                    </span>
-                  </button>
-
-                  {/* Modo Noturno / Púlpito */}
-                  <button
-                    type="button"
-                    onClick={() => setIsPulpitMode(!isPulpitMode)}
-                    className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex items-center justify-between gap-2 hover:border-amber-400/50 transition-all text-left"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      {isPulpitMode ? (
-                        <Moon className="w-5 h-5 text-indigo-400" />
-                      ) : (
-                        <Sun className="w-5 h-5 text-amber-500" />
-                      )}
-                      <div>
-                        <div className="text-xs font-bold text-slate-900 dark:text-white">Modo Escuro</div>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                          {isPulpitMode ? 'Tema escuro ativado' : 'Tema claro padrão'}
-                        </div>
-                      </div>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold ${
-                      isPulpitMode ? 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-300' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
-                    }`}>
-                      {isPulpitMode ? 'ESCURO' : 'CLARO'}
-                    </span>
-                  </button>
-                </div>
-
-                {/* Tamanho da Fonte */}
-                <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-bold text-slate-900 dark:text-white">Tamanho do Texto</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400">Ajustar legibilidade</div>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 rounded-xl p-1 border border-slate-200 dark:border-slate-800">
-                    <button
-                      type="button"
-                      onClick={decreaseFontSize}
-                      className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs flex items-center justify-center active:scale-95"
-                    >
-                      A⁻
-                    </button>
-                    <button
-                      type="button"
-                      onClick={resetFontSize}
-                      className="px-2 h-8 text-amber-600 dark:text-amber-400 font-extrabold text-xs flex items-center justify-center"
-                    >
-                      {Math.round(fontScale * 100)}%
-                    </button>
-                    <button
-                      type="button"
-                      onClick={increaseFontSize}
-                      className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 font-black text-xs flex items-center justify-center active:scale-95 shadow-xs"
-                    >
-                      A⁺
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card de Instalação e APK */}
-              <div className="bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4 space-y-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-xs">
-                    <Smartphone className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
-                      Aplicativo Oficial & Instalação
-                    </div>
-                    <div className="text-[10px] text-emerald-700 dark:text-emerald-400">
-                      Para melhor experiência no púlpito e na recepção
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                  <a
-                    href="https://github.com/AlexSSCoelho/ipra-avisos/releases/latest"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all text-center"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Baixar APK (Android)</span>
-                  </a>
-
-                  {!isInstalled && (
-                    <button
-                      type="button"
-                      onClick={promptInstall}
-                      className="p-2.5 rounded-xl bg-emerald-700/30 dark:bg-emerald-900/50 border border-emerald-400 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 text-xs font-bold flex items-center justify-center gap-2 hover:bg-emerald-600 hover:text-white transition-all"
-                    >
-                      <Package className="w-4 h-4" />
-                      <span>Instalar Web (PWA)</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Card: Minha Senha de Acesso */}
-              <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shadow-xs font-black">
-                    <KeyRound className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-900 dark:text-white">
-                      Minha Senha de Acesso
-                    </div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                      Troque a senha padrão (1234) por uma senha pessoal de sua escolha
-                    </div>
-                  </div>
-                </div>
-
-                <form onSubmit={handleAlterarMinhaSenha} className="space-y-2.5 pt-1">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
-                      Senha Atual:
-                    </label>
-                    <input
-                      type="password"
-                      inputMode="numeric"
-                      required
-                      value={minhaSenhaAtual}
-                      onChange={(e) => setMinhaSenhaAtual(e.target.value)}
-                      placeholder="Senha atual (ou 1234)"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {/* Instalar App (PWA) */}
+              {!isInstalled && canInstall && (
+                <button
+                  type="button"
+                  onClick={promptInstall}
+                  className="w-full p-4 rounded-2xl bg-[#E8F2FC] dark:bg-[#0D1E38] border-2 border-[#03589E]/40 text-[#062552] dark:text-white flex items-center justify-between gap-3 min-h-[60px]"
+                >
+                  <div className="flex items-center gap-3 text-left">
+                    <Smartphone className="w-6 h-6 text-[#03589E] dark:text-[#60A5FA]" />
                     <div>
-                      <label className="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
-                        Nova Senha (mín. 4 números):
-                      </label>
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        required
-                        value={minhaNovaSenha}
-                        onChange={(e) => setMinhaNovaSenha(e.target.value)}
-                        placeholder="Mínimo 4 números"
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono"
-                      />
+                      <p className="font-extrabold text-sm">Instalar na Tela Inicial</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        Acesso rápido como aplicativo nativo
+                      </p>
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
-                        Confirmar Nova Senha:
-                      </label>
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        required
-                        value={minhaConfirmarSenha}
-                        onChange={(e) => setMinhaConfirmarSenha(e.target.value)}
-                        placeholder="Repita a nova senha"
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono"
-                      />
+                  </div>
+                  <Download className="w-5 h-5 text-[#03589E] dark:text-[#60A5FA]" />
+                </button>
+              )}
+
+              {/* Alterar Minha Própria Senha */}
+              {currentUser && (
+                <form
+                  onSubmit={handleAlterarMinhaSenha}
+                  className="p-4 rounded-2xl bg-[#F4F7FB] dark:bg-[#040B16] border-2 border-[#D5E2F0] dark:border-[#1C3559] space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <KeyRound className="w-5 h-5 text-[#E85D04] dark:text-[#FBB016]" />
+                      <h3 className="text-sm font-extrabold text-[#062552] dark:text-white">
+                        Alterar Minha Senha
+                      </h3>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowMinhasSenhas((prev) => !prev)}
+                      className="text-xs font-bold text-[#03589E] dark:text-[#60A5FA] flex items-center gap-1 px-2 py-1"
+                    >
+                      {showMinhasSenhas ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      <span>{showMinhasSenhas ? 'Ocultar' : 'Mostrar'}</span>
+                    </button>
                   </div>
 
                   {minhaSenhaError && (
-                    <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-bold">
+                    <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-300 text-rose-800 dark:text-rose-200 text-xs font-bold">
                       {minhaSenhaError}
                     </div>
                   )}
-
                   {minhaSenhaSuccess && (
-                    <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-bold">
+                    <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 text-emerald-800 dark:text-emerald-200 text-xs font-bold">
                       {minhaSenhaSuccess}
                     </div>
                   )}
 
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-xs transition-all touch-target"
-                  >
-                    Salvar Nova Senha
-                  </button>
-                </form>
-              </div>
-
-            </div>
-          )}
-
-          {/* SEÇÃO 2: PAINEL ADMINISTRATIVO (SOMENTE ADMIN) */}
-          {isAdmin && mainTab === 'admin' && (
-            <>
-              {/* SUB-ABA: DIRIGENTE */}
-              {adminSection === 'dirigente' && (
-                <form onSubmit={handleSalvarDirigente} className="space-y-3.5">
-                  <div>
-                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                      <Crown className="w-4 h-4 text-amber-500" />
-                      <span>Definir Dirigente do Culto</span>
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Atual: <strong className="text-slate-900 dark:text-white">{dirigenteAtualNome}</strong>
-                    </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <input
+                      type={showMinhasSenhas ? 'text' : 'password'}
+                      inputMode="numeric"
+                      value={minhaSenhaAtual}
+                      onChange={(e) => setMinhaSenhaAtual(e.target.value)}
+                      placeholder="Senha atual"
+                      className={inputClass}
+                    />
+                    <input
+                      type={showMinhasSenhas ? 'text' : 'password'}
+                      inputMode="numeric"
+                      value={minhaNovaSenha}
+                      onChange={(e) => setMinhaNovaSenha(e.target.value)}
+                      placeholder="Nova senha (4+ núm.)"
+                      className={inputClass}
+                    />
+                    <input
+                      type={showMinhasSenhas ? 'text' : 'password'}
+                      inputMode="numeric"
+                      value={minhaConfirmarSenha}
+                      onChange={(e) => setMinhaConfirmarSenha(e.target.value)}
+                      placeholder="Confirmar nova"
+                      className={inputClass}
+                    />
                   </div>
-
-                  <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                    {obreiros.map((ob) => {
-                      const isSelected = selectedDirigenteId === ob.id;
-                      return (
-                        <button
-                          key={ob.id}
-                          type="button"
-                          onClick={() => setSelectedDirigenteId(ob.id)}
-                          className={`w-full text-left p-3 rounded-2xl border flex items-center justify-between transition-all ${
-                            isSelected
-                              ? 'bg-amber-500/10 border-amber-500 text-amber-900 dark:text-amber-200 font-bold ring-1 ring-amber-500/30'
-                              : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:text-slate-300'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold ${
-                              isSelected ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                            }`}>
-                              {ob.nome.charAt(0)}
-                            </div>
-                            <div>
-                              <div className="text-xs font-bold leading-tight">{ob.nome}</div>
-                              <div className="text-[10px] text-slate-400">{getCargoLabel(ob.cargo)}</div>
-                            </div>
-                          </div>
-                          {isSelected && <UserCheck className="w-4 h-4 text-amber-600 dark:text-amber-400" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {dirigenteSuccess && (
-                    <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5" />
-                      <span>{dirigenteSuccess}</span>
-                    </div>
-                  )}
 
                   <button
                     type="submit"
-                    className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-md transition-all touch-target"
+                    className="w-full py-3 rounded-xl bg-[#03589E] hover:bg-[#062552] text-white font-extrabold text-sm min-h-[46px]"
                   >
-                    Confirmar Dirigente
+                    Salvar Minha Nova Senha
                   </button>
                 </form>
               )}
+            </>
+          ) : (
+            /* ÁREA ADMINISTRATIVA */
+            <div className="space-y-5">
+              {/* Submenu Admin */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { id: 'dirigente', label: 'Dirigente', icon: Crown },
+                  { id: 'obreiros', label: 'Obreiros', icon: Users },
+                  { id: 'seguranca', label: 'Senha Admin', icon: KeyRound },
+                  { id: 'nuvem', label: 'Conexão', icon: Cpu },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  const active = adminSection === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setAdminSection(item.id as typeof adminSection)}
+                      className={`py-2.5 px-3 rounded-2xl border-2 text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all min-h-[44px] ${
+                        active
+                          ? 'bg-[#062552] border-[#062552] text-white dark:bg-[#FBB016] dark:border-[#FBB016] dark:text-[#040B16]'
+                          : 'bg-[#F4F7FB] dark:bg-[#040B16] border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-slate-300'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
 
-              {/* SUB-ABA: OBREIROS */}
-              {adminSection === 'obreiros' && (
-                <div className="space-y-3.5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                        <Users className="w-4 h-4 text-amber-500" />
-                        <span>Membros Ministeriais</span>
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {obreiros.length} obreiros cadastrados
-                      </p>
-                    </div>
-
-                    {isMaster && (
-                      <button
-                        type="button"
-                        onClick={() => setShowAddObreiro(!showAddObreiro)}
-                        className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1 shadow-xs transition-all"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>{showAddObreiro ? 'Fechar' : 'Novo'}</span>
-                      </button>
-                    )}
+              {adminSection === 'dirigente' && (
+                <form
+                  onSubmit={handleSalvarDirigente}
+                  className="space-y-4 bg-[#F4F7FB] dark:bg-[#040B16] p-4 rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559]"
+                >
+                  <div>
+                    <h3 className="font-extrabold text-base text-[#062552] dark:text-white">
+                      Definir Dirigente do Culto
+                    </h3>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                      Atual: <strong>{dirigenteAtualNome}</strong>
+                    </p>
                   </div>
 
-                  {!isMaster && (
-                    <div className="p-3 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-[11px] text-slate-600 dark:text-slate-400">
-                      Visualização de obreiros. O cadastro e gerenciamento de novos membros ministeriais é exclusivo do Administrador Master.
-                    </div>
-                  )}
+                  {!cultoAtivo ? (
+                    <p className="text-sm font-semibold text-[#9A3412] dark:text-[#FCD34D]">
+                      Inicie um culto primeiro para trocar o dirigente em exercício.
+                    </p>
+                  ) : (
+                    <>
+                      <select
+                        value={selectedDirigenteId}
+                        onChange={(e) => setSelectedDirigenteId(e.target.value)}
+                        className={inputClass}
+                      >
+                        <option value="">Selecione um obreiro...</option>
+                        {obreiros
+                          .filter((o) => o.ativo !== false)
+                          .map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {o.nome} — {getCargoLabel(o.cargo)}
+                            </option>
+                          ))}
+                      </select>
 
-                  {/* Ação Administrativa: Importar Obreiros Oficiais da IPRA (Exclusivo Master) */}
-                  {isMaster && (
-                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="text-xs font-black text-amber-900 dark:text-amber-200">
-                            Relação Oficial IPRA Auriflama
-                          </div>
-                          <div className="text-[11px] text-amber-800/80 dark:text-amber-300/80">
-                            Importar equipe completa e menções honrosas sem sobrescrever registros
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleImportarOficiais}
-                          className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shrink-0 active:scale-95 transition-all shadow-xs"
+                      {dirigenteFeedback && (
+                        <div
+                          className={`p-3 rounded-xl text-xs font-bold ${
+                            dirigenteFeedback.ok
+                              ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200 border border-emerald-300'
+                              : 'bg-rose-50 dark:bg-rose-950/60 text-rose-800 dark:text-rose-200 border border-rose-300'
+                          }`}
                         >
-                          Importar
-                        </button>
-                      </div>
-
-                      {importMsg && (
-                        <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-amber-500/40 text-xs font-bold text-amber-900 dark:text-amber-200 animate-in fade-in">
-                          {importMsg}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {isMaster && showAddObreiro && (
-                    <form onSubmit={handleAddObreiro} className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-3 animate-in fade-in">
-                      <div className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center justify-between">
-                        <span>Cadastrar Novo Obreiro</span>
-                        <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">Acesso Master</span>
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Nome Completo:</label>
-                        <input
-                          type="text"
-                          required
-                          value={nome}
-                          onChange={(e) => setNome(e.target.value)}
-                          placeholder="Ex: Donozor Monlevade"
-                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Função / Cargo:</label>
-                          <select
-                            value={cargoUnificado}
-                            onChange={(e) => handleCargoUnificadoChange(e.target.value as CargoUnificado)}
-                            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium"
-                          >
-                            <option value="pastor">Pastor</option>
-                            <option value="pastor_auxiliar">Pastor Auxiliar</option>
-                            <option value="presbitero">Presbítero</option>
-                            <option value="diacono">Diácono (a)</option>
-                            <option value="evangelista">Evangelista</option>
-                            <option value="missionario">Missionário (a)</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Gênero:</label>
-                          {['pastor', 'pastor_auxiliar', 'presbitero'].includes(cargoUnificado) ? (
-                            <div className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/60 text-slate-500 font-semibold flex items-center justify-between">
-                              <span>Homem</span>
-                              <span className="text-[10px] text-amber-500 font-bold">(Exclusivo)</span>
-                            </div>
-                          ) : (
-                            <select
-                              value={genero}
-                              onChange={(e) => setGenero(e.target.value as 'homem' | 'mulher')}
-                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium"
-                            >
-                              <option value="homem">Homem</option>
-                              <option value="mulher">Mulher</option>
-                            </select>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-[11px] text-amber-800 dark:text-amber-300 font-medium">
-                        Resultado: <strong className="font-bold text-amber-900 dark:text-amber-200">
-                          {cargoUnificado === 'pastor' && 'Pastor Titular (Homem)'}
-                          {cargoUnificado === 'pastor_auxiliar' && 'Pastor Auxiliar (Homem)'}
-                          {cargoUnificado === 'presbitero' && 'Presbítero (Homem)'}
-                          {cargoUnificado === 'diacono' && (genero === 'mulher' ? 'Diaconisa (Mulher)' : 'Diácono (Homem)')}
-                          {cargoUnificado === 'evangelista' && (genero === 'mulher' ? 'Evangelista (Mulher)' : 'Evangelista (Homem)')}
-                          {cargoUnificado === 'missionario' && (genero === 'mulher' ? 'Missionária (Mulher)' : 'Missionário (Homem)')}
-                        </strong> • Senha padrão inicial: <strong className="font-mono font-bold">1234</strong>
-                      </div>
-
-                      <div className="flex items-center gap-2 pt-1">
-                        <input
-                          type="checkbox"
-                          id="novo_admin_check"
-                          checked={isNovoAdmin}
-                          onChange={(e) => setIsNovoAdmin(e.target.checked)}
-                          className="rounded text-amber-500 focus:ring-amber-400 h-4 w-4"
-                        />
-                        <label htmlFor="novo_admin_check" className="text-xs text-slate-700 dark:text-slate-300 font-semibold cursor-pointer">
-                          Conceder acesso de Administrador
-                        </label>
-                      </div>
-
-                      {obreiroError && (
-                        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
-                          {obreiroError}
-                        </div>
-                      )}
-
-                      {obreiroSuccess && (
-                        <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold">
-                          {obreiroSuccess}
+                          {dirigenteFeedback.msg}
                         </div>
                       )}
 
                       <button
                         type="submit"
-                        className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-md transition-all touch-target"
+                        className="w-full py-3.5 rounded-2xl bg-[#03589E] hover:bg-[#062552] text-white font-extrabold text-sm flex items-center justify-center gap-2 min-h-[48px]"
                       >
-                        Salvar Obreiro
+                        <UserCheck className="w-4 h-4" />
+                        <span>Atualizar Dirigente</span>
+                      </button>
+                    </>
+                  )}
+                </form>
+              )}
+
+              {adminSection === 'obreiros' && (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddObreiro((p) => !p)}
+                      className="flex-1 py-3 px-4 rounded-2xl bg-[#03589E] hover:bg-[#062552] text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-1.5 min-h-[46px]"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>{showAddObreiro ? 'Fechar Cadastro' : 'Novo Obreiro'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleImportarOficiais}
+                      className="flex-1 py-3 px-4 rounded-2xl bg-[#F4F7FB] dark:bg-[#040B16] border-2 border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-1.5 min-h-[46px]"
+                    >
+                      <Package className="w-4 h-4 text-[#03589E] shrink-0" />
+                      <span>Importar Lista</span>
+                    </button>
+                  </div>
+
+                  {importMsg && (
+                    <div className="p-3 rounded-xl bg-[#E8F2FC] dark:bg-[#0D1E38] border border-[#03589E]/40 text-xs font-bold text-[#062552] dark:text-slate-100">
+                      {importMsg}
+                    </div>
+                  )}
+
+                  {showAddObreiro && (
+                    <form
+                      onSubmit={handleAddObreiro}
+                      className="p-4 rounded-2xl bg-[#F4F7FB] dark:bg-[#040B16] border-2 border-[#D5E2F0] dark:border-[#1C3559] space-y-3"
+                    >
+                      {obreiroError && (
+                        <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-300 text-rose-800 dark:text-rose-200 text-xs font-bold">
+                          {obreiroError}
+                        </div>
+                      )}
+                      {obreiroSuccess && (
+                        <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 text-emerald-800 dark:text-emerald-200 text-xs font-bold">
+                          {obreiroSuccess}
+                        </div>
+                      )}
+
+                      <input
+                        type="text"
+                        required
+                        value={nome}
+                        onChange={(e) => setNome(e.target.value)}
+                        placeholder="Nome completo do obreiro"
+                        className={inputClass}
+                      />
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <select
+                          value={cargoUnificado}
+                          onChange={(e) => handleCargoUnificadoChange(e.target.value as CargoUnificado)}
+                          className={inputClass}
+                        >
+                          <option value="diacono">Diácono / Diaconisa</option>
+                          <option value="presbitero">Presbítero</option>
+                          <option value="pastor_auxiliar">Pastor Auxiliar</option>
+                          <option value="pastor">Pastor</option>
+                          <option value="evangelista">Evangelista</option>
+                          <option value="missionario">Missionário / Missionária</option>
+                        </select>
+
+                        {(cargoUnificado === 'diacono' ||
+                          cargoUnificado === 'evangelista' ||
+                          cargoUnificado === 'missionario') && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setGenero('homem')}
+                              className={`rounded-xl border-2 font-bold text-xs min-h-[46px] ${
+                                genero === 'homem'
+                                  ? 'bg-[#03589E] border-[#03589E] text-white'
+                                  : 'bg-white dark:bg-[#081529] border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-slate-300'
+                              }`}
+                            >
+                              Irmão
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setGenero('mulher')}
+                              className={`rounded-xl border-2 font-bold text-xs min-h-[46px] ${
+                                genero === 'mulher'
+                                  ? 'bg-[#03589E] border-[#03589E] text-white'
+                                  : 'bg-white dark:bg-[#081529] border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-slate-300'
+                              }`}
+                            >
+                              Irmã
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <label className="flex items-center gap-2.5 p-2 text-xs font-bold text-[#062552] dark:text-slate-200 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isNovoAdmin}
+                          onChange={(e) => setIsNovoAdmin(e.target.checked)}
+                          className="w-5 h-5 accent-[#03589E]"
+                        />
+                        <span>Permitir acesso administrativo</span>
+                      </label>
+
+                      <button
+                        type="submit"
+                        className="w-full py-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-sm min-h-[46px]"
+                      >
+                        Cadastrar Obreiro
                       </button>
                     </form>
                   )}
 
-                  <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                    {obreiros.map((ob) => (
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {obreiros.map((o) => (
                       <div
-                        key={ob.id}
-                        className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/40"
+                        key={o.id}
+                        className="p-3 rounded-2xl bg-[#F4F7FB] dark:bg-[#040B16] border border-[#D5E2F0] dark:border-[#1C3559] flex items-center justify-between gap-2"
                       >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-7 h-7 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center text-xs">
-                            {ob.nome.charAt(0)}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="text-xs font-bold text-slate-900 dark:text-white truncate">{ob.nome}</div>
-                            <div className="text-[10px] text-slate-400 truncate">{getCargoLabel(ob.cargo)}</div>
-                          </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm text-[#062552] dark:text-white truncate">
+                            {o.nome}
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {getCargoLabel(o.cargo)}
+                          </p>
                         </div>
-                        {ob.isAdmin && (
-                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                            ADMIN
+                        {o.isAdmin && (
+                          <span className="px-2 py-0.5 rounded-lg bg-[#FFF4E5] dark:bg-[#F59E0B]/20 text-[#9A3412] dark:text-[#FCD34D] text-xs font-extrabold shrink-0">
+                            Administrador
                           </span>
                         )}
                       </div>
@@ -876,162 +771,101 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 </div>
               )}
 
-              {/* SUB-ABA: SEGURANÇA & PIN */}
               {adminSection === 'seguranca' && (
-                !hasPinConfigured ? (
-                  <form onSubmit={handleConfigureInitialPin} className="space-y-3">
-                    <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs">
-                      <div className="font-bold flex items-center gap-1.5 mb-1">
-                        <KeyRound className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                        <span>Configuração do Primeiro PIN Administrativo</span>
-                      </div>
-                      <p className="leading-relaxed">
-                        Esta instalação ainda não possui um PIN administrativo configurado. Como administrador, defina agora o PIN administrativo de segurança do sistema.
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">Novo PIN Administrativo:</label>
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        required
-                        value={newPin}
-                        onChange={(e) => setNewPin(e.target.value)}
-                        placeholder="Mínimo 4 dígitos numéricos"
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">Confirmar Novo PIN:</label>
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        required
-                        value={confirmPin}
-                        onChange={(e) => setConfirmPin(e.target.value)}
-                        placeholder="Repita o PIN"
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white"
-                      />
-                    </div>
-
-                    {pinError && (
-                      <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-bold">
-                        {pinError}
-                      </div>
-                    )}
-
-                    {pinSuccess && (
-                      <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-bold">
-                        {pinSuccess}
-                      </div>
-                    )}
-
-                    <button
-                      type="submit"
-                      className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-md transition-all touch-target"
-                    >
-                      Gravar PIN Administrativo
-                    </button>
-                  </form>
-                ) : (
-                  <form onSubmit={handleUpdatePin} className="space-y-3">
-                    <div>
-                      <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                        Alterar Senha Administrativa
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        Código numérico para autorizações administrativas no púlpito.
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">Senha Atual:</label>
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        required
-                        value={currentPin}
-                        onChange={(e) => setCurrentPin(e.target.value)}
-                        placeholder="Senha atual"
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">Nova Senha:</label>
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        required
-                        value={newPin}
-                        onChange={(e) => setNewPin(e.target.value)}
-                        placeholder="Nova senha de 4 dígitos numéricos"
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white"
-                      />
-                    </div>
-
-                    {pinError && (
-                      <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
-                        {pinError}
-                      </div>
-                    )}
-
-                    {pinSuccess && (
-                      <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold">
-                        {pinSuccess}
-                      </div>
-                    )}
-
-                    <button
-                      type="submit"
-                      className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-md transition-all touch-target"
-                    >
-                      Salvar Nova Senha
-                    </button>
-                  </form>
-                )
-              )}
-
-              {/* SUB-ABA: SISTEMA AVANÇADO (NUVEM FIREBASE) */}
-              {adminSection === 'nuvem' && (
-                <form onSubmit={handleSaveFirebase} className="space-y-3">
-                  <div>
-                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                      <Cpu className="w-4 h-4 text-amber-500" />
-                      <span>Sistema Avançado — Nuvem (Firestore)</span>
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Configuração opcional de credenciais JSON do Firebase para sincronização remota entre dispositivos.
+                <form
+                  onSubmit={handleUpdatePin}
+                  className="space-y-3 bg-[#F4F7FB] dark:bg-[#040B16] p-4 rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559]"
+                >
+                  <h3 className="font-extrabold text-base text-[#062552] dark:text-white">
+                    Alterar Senha Administrativa
+                  </h3>
+                  {!isMaster && (
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      Permite trocar o dirigente do culto no púlpito.
                     </p>
-                  </div>
+                  )}
 
-                  <textarea
-                    rows={5}
-                    value={firebaseJson}
-                    onChange={(e) => setFirebaseJson(e.target.value)}
-                    placeholder='{ "apiKey": "...", "projectId": "ipra-avisos", ... }'
-                    className="w-full p-3 font-mono text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white"
-                  />
-
-                  {firebaseSaved && (
-                    <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold">
-                      Conexão com a nuvem salva com sucesso!
+                  {pinError && (
+                    <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-300 text-rose-800 dark:text-rose-200 text-xs font-bold">
+                      {pinError}
+                    </div>
+                  )}
+                  {pinSuccess && (
+                    <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 text-emerald-800 dark:text-emerald-200 text-xs font-bold">
+                      {pinSuccess}
                     </div>
                   )}
 
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    value={currentPin}
+                    onChange={(e) => setCurrentPin(e.target.value)}
+                    placeholder="Senha administrativa atual"
+                    className={inputClass}
+                  />
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    value={newPin}
+                    onChange={(e) => setNewPin(e.target.value)}
+                    placeholder="Nova senha (mínimo 4 números)"
+                    className={inputClass}
+                  />
+
                   <button
                     type="submit"
-                    className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-md transition-all touch-target"
+                    className="w-full py-3.5 rounded-2xl bg-[#03589E] hover:bg-[#062552] text-white font-extrabold text-sm min-h-[48px]"
                   >
-                    Salvar Configurações Avançadas
+                    Atualizar Senha
                   </button>
                 </form>
               )}
-            </>
-          )}
 
+              {adminSection === 'nuvem' && (
+                <form
+                  onSubmit={handleSaveFirebase}
+                  className="space-y-3 bg-[#F4F7FB] dark:bg-[#040B16] p-4 rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559]"
+                >
+                  <h3 className="font-extrabold text-base text-[#062552] dark:text-white">
+                    Sincronização Online
+                  </h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-300">
+                    Cole abaixo os dados de conexão do servidor da igreja.
+                  </p>
+
+                  {firebaseError && (
+                    <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-300 text-rose-800 dark:text-rose-200 text-xs font-bold flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{firebaseError}</span>
+                    </div>
+                  )}
+
+                  {firebaseSaved && (
+                    <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 text-emerald-800 dark:text-emerald-200 text-xs font-bold flex items-center gap-2">
+                      <Check className="w-4 h-4 shrink-0" />
+                      <span>Conexão salva.</span>
+                    </div>
+                  )}
+
+                  <textarea
+                    value={firebaseJson}
+                    onChange={(e) => setFirebaseJson(e.target.value)}
+                    rows={6}
+                    placeholder="Dados de conexão"
+                    className={`${inputClass} font-mono text-xs`}
+                  />
+
+                  <button
+                    type="submit"
+                    className="w-full py-3.5 rounded-2xl bg-[#03589E] hover:bg-[#062552] text-white font-extrabold text-sm min-h-[48px]"
+                  >
+                    Salvar Conexão
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,564 +1,552 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  Archive, 
-  Search, 
-  Check, 
-  Clock, 
-  Share2, 
-  X, 
-  Calendar, 
-  UserCheck, 
-  CheckCircle2, 
-  AlertCircle 
-} from 'lucide-react';
 import { useAvisos } from '../../context/AvisosContext';
 import { useCulto } from '../../context/CultoContext';
-import { formatHora, getTipoAvisoLabel, getCargoLabel } from '../../utils/formatters';
-import type { TipoAviso } from '../../types';
+import {
+  formatHora,
+  getCategoriaOracaoLabel,
+  getGrupoReuniaoLabel,
+  getVisitanteGeneroLabel,
+} from '../../utils/formatters';
+import { getAvisoVisual } from '../../utils/avisoVisual';
+import {
+  Copy,
+  CheckCircle2,
+  History,
+  Church,
+  Calendar,
+  Clock,
+  Check,
+  UserPlus,
+  HeartHandshake,
+  Megaphone,
+  Share2,
+  ChevronDown,
+  X,
+} from 'lucide-react';
+import type { AvisoItem, CultoAtivo } from '../../types';
+
+/** Formata descrição, data e destinatário de um comunicado geral para exibição e relatório. */
+function formatGeralDetalhes(aviso: AvisoItem): string {
+  if (!aviso.geral) return '';
+  return [
+    aviso.geral.descricao,
+    aviso.geral.dataEvento ? `Quando: ${aviso.geral.dataEvento}` : '',
+    aviso.geral.destinatario ? `Para: ${aviso.geral.destinatario}` : '',
+  ]
+    .filter(Boolean)
+    .join(' • ');
+}
 
 export const HistoricoScreen: React.FC = () => {
   const { avisos } = useAvisos();
   const { cultoAtivo, historicoCultos } = useCulto();
 
-  // ID da sessão selecionada (padrão: culto ativo em andamento ou o mais recente do histórico)
-  const [cultoSelecionadoId, setCultoSelecionadoId] = useState<string>('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedTipo, setSelectedTipo] = useState<TipoAviso | 'todos'>('todos');
-  const [statusFiltro, setStatusFiltro] = useState<'todos' | 'anunciado' | 'pendente'>('todos');
-  const [copied, setCopied] = useState(false);
-
-  // Sessão padrão calculada
-  const idSessaoEfetiva = useMemo(() => {
-    if (cultoSelecionadoId) return cultoSelecionadoId;
-    if (cultoAtivo && cultoAtivo.status === 'em_andamento') return cultoAtivo.id;
-    if (historicoCultos.length > 0) return historicoCultos[0].id;
-    if (cultoAtivo) return cultoAtivo.id;
-    return '';
-  }, [cultoSelecionadoId, cultoAtivo, historicoCultos]);
-
-  // Objeto do culto / sessão selecionada
-  const sessaoSelecionada = useMemo(() => {
-    return (
-      historicoCultos.find((c) => c.id === idSessaoEfetiva) ||
-      (cultoAtivo?.id === idSessaoEfetiva ? cultoAtivo : null)
-    );
-  }, [historicoCultos, idSessaoEfetiva, cultoAtivo]);
-
-  // Avisos restritos à sessão selecionada
-  const avisosDaSessao = useMemo(() => {
-    if (!idSessaoEfetiva) return [];
-    return avisos.filter((item) => item.cultoId === idSessaoEfetiva);
-  }, [avisos, idSessaoEfetiva]);
-
-  // Métricas estritas da sessão selecionada
-  const stats = useMemo(() => {
-    return {
-      visitantes: avisosDaSessao.filter((a) => a.tipo === 'visitante').length,
-      oracoes: avisosDaSessao.filter((a) => a.tipo === 'oracao').length,
-      reunioes: avisosDaSessao.filter((a) => a.tipo === 'reuniao').length,
-      gerais: avisosDaSessao.filter((a) => a.tipo === 'geral').length,
-      anunciados: avisosDaSessao.filter((a) => a.status === 'anunciado').length,
-      pendentes: avisosDaSessao.filter((a) => a.status === 'pendente').length,
-      total: avisosDaSessao.length,
-    };
-  }, [avisosDaSessao]);
-
-  // Filtros aplicados sobre os avisos da sessão
-  const avisosFiltrados = useMemo(() => {
-    return avisosDaSessao.filter((item) => {
-      if (selectedTipo !== 'todos' && item.tipo !== selectedTipo) {
-        return false;
+  const todosCultos = useMemo(() => {
+    const lista: CultoAtivo[] = [];
+    if (cultoAtivo) lista.push(cultoAtivo);
+    historicoCultos.forEach((h) => {
+      if (!lista.some((c) => c.id === h.id)) {
+        lista.push(h);
       }
-
-      if (statusFiltro !== 'todos' && item.status !== statusFiltro) {
-        return false;
-      }
-
-      if (searchTerm.trim()) {
-        const query = searchTerm.toLowerCase();
-        const nomeVisitante = item.visitante?.nome.toLowerCase() || '';
-        const cidade = item.visitante?.cidade?.toLowerCase() || '';
-        const igreja = item.visitante?.igreja?.toLowerCase() || '';
-        const nomeOracao = item.oracao?.nomePessoa.toLowerCase() || '';
-        const motivoOracao = item.oracao?.motivo?.toLowerCase() || '';
-        const localReuniao = item.reuniao?.local.toLowerCase() || '';
-        const dataReuniao = item.reuniao?.dataTexto.toLowerCase() || '';
-        const tituloGeral = item.geral?.titulo.toLowerCase() || '';
-        const descGeral = item.geral?.descricao?.toLowerCase() || '';
-        const autor = item.autorNome.toLowerCase();
-
-        return (
-          nomeVisitante.includes(query) ||
-          cidade.includes(query) ||
-          igreja.includes(query) ||
-          nomeOracao.includes(query) ||
-          motivoOracao.includes(query) ||
-          localReuniao.includes(query) ||
-          dataReuniao.includes(query) ||
-          tituloGeral.includes(query) ||
-          descGeral.includes(query) ||
-          autor.includes(query)
-        );
-      }
-
-      return true;
     });
-  }, [avisosDaSessao, selectedTipo, statusFiltro, searchTerm]);
+    return lista;
+  }, [cultoAtivo, historicoCultos]);
 
-  // Formatação da data da sessão
-  const dataSessaoFormatada = useMemo(() => {
-    if (!sessaoSelecionada?.data) return new Date().toLocaleDateString('pt-BR');
+  const [cultoSelecionadoId, setCultoSelecionadoId] = useState<string>(
+    cultoAtivo?.id || historicoCultos[0]?.id || ''
+  );
+  const [filtroStatus, setFiltroStatus] = useState<'todos' | 'pendente' | 'anunciado'>('todos');
+  const [copiado, setCopiado] = useState(false);
+  const [showCultoPicker, setShowCultoPicker] = useState(false);
+
+  const effectiveSelectedId = useMemo(() => {
+    if (todosCultos.some((c) => c.id === cultoSelecionadoId)) {
+      return cultoSelecionadoId;
+    }
+    return todosCultos[0]?.id || '';
+  }, [todosCultos, cultoSelecionadoId]);
+
+  const cultoSelecionado = useMemo(() => {
+    return todosCultos.find((c) => c.id === effectiveSelectedId) || null;
+  }, [todosCultos, effectiveSelectedId]);
+
+  const avisosDoCulto = useMemo(() => {
+    if (!effectiveSelectedId) return [];
+    return avisos.filter((a) => a.cultoId === effectiveSelectedId);
+  }, [avisos, effectiveSelectedId]);
+
+  const avisosFiltrados = useMemo(() => {
+    if (filtroStatus === 'todos') return avisosDoCulto;
+    return avisosDoCulto.filter((a) => a.status === filtroStatus);
+  }, [avisosDoCulto, filtroStatus]);
+
+  const visitantes = avisosDoCulto.filter((a) => a.tipo === 'visitante');
+  const oracoes = avisosDoCulto.filter((a) => a.tipo === 'oracao');
+  const reunioes = avisosDoCulto.filter((a) => a.tipo === 'reuniao');
+  const gerais = avisosDoCulto.filter((a) => a.tipo === 'geral');
+
+  const formatDataBr = (isoDate: string) => {
     try {
-      const parts = sessaoSelecionada.data.split('-');
-      if (parts.length === 3) {
-        return `${parts[2]}/${parts[1]}/${parts[0]}`;
-      }
-      return new Date(sessaoSelecionada.data + 'T12:00:00').toLocaleDateString('pt-BR');
+      const [ano, mes, dia] = isoDate.split('-');
+      return `${dia}/${mes}/${ano}`;
     } catch {
-      return sessaoSelecionada.data;
-    }
-  }, [sessaoSelecionada]);
-
-  // Gerador de Relatório estrito para a sessão selecionada
-  const handleCopiarRelatorio = async () => {
-    if (!sessaoSelecionada) return;
-
-    const nomeCulto = sessaoSelecionada.nomeCulto || 'Culto de Celebração';
-    const dirigente = sessaoSelecionada.dirigenteNome || '';
-    const cargoDirigente = sessaoSelecionada.dirigenteCargo
-      ? ` (${getCargoLabel(sessaoSelecionada.dirigenteCargo)})`
-      : '';
-
-    let relatorio = `📋 *RELATÓRIO DE AVISOS — IPRA AURIFLAMA*\n`;
-    relatorio += `⛪ *Culto:* ${nomeCulto}\n`;
-    relatorio += `📅 *Data:* ${dataSessaoFormatada}`;
-    if (sessaoSelecionada.horarioInicio) {
-      relatorio += ` às ${sessaoSelecionada.horarioInicio}`;
-    }
-    if (dirigente) {
-      relatorio += `\n👤 *Dirigente:* ${dirigente}${cargoDirigente}`;
-    }
-    relatorio += `\n📊 *Total de registros:* ${stats.total} (${stats.anunciados} lidos, ${stats.pendentes} pendentes)\n`;
-    relatorio += `----------------------------------------\n\n`;
-
-    const visitantes = avisosDaSessao.filter((a) => a.tipo === 'visitante');
-    if (visitantes.length > 0) {
-      relatorio += `👤 *VISITANTES (${visitantes.length}):*\n`;
-      visitantes.forEach((v, idx) => {
-        const origens = [v.visitante?.cidade, v.visitante?.igreja ? `(${v.visitante.igreja})` : '']
-          .filter(Boolean)
-          .join(' ');
-        relatorio += `${idx + 1}. *${v.visitante?.nome}*${origens ? ` - ${origens}` : ''}\n`;
-        if (v.visitante?.observacao) relatorio += `   _Obs: ${v.visitante.observacao}_\n`;
-      });
-      relatorio += `\n`;
-    }
-
-    const oracoes = avisosDaSessao.filter((a) => a.tipo === 'oracao');
-    if (oracoes.length > 0) {
-      relatorio += `🙏 *PEDIDOS DE ORAÇÃO (${oracoes.length}):*\n`;
-      oracoes.forEach((o, idx) => {
-        relatorio += `${idx + 1}. *${o.oracao?.nomePessoa}* ${o.oracao?.urgente ? '🚨 (Prioridade)' : ''}\n`;
-        if (o.oracao?.motivo) {
-          relatorio += `   _${o.oracao.motivo}_\n`;
-        }
-      });
-      relatorio += `\n`;
-    }
-
-    const reunioes = avisosDaSessao.filter((a) => a.tipo === 'reuniao');
-    if (reunioes.length > 0) {
-      relatorio += `👥 *REUNIÕES & GRUPOS:*\n`;
-      reunioes.forEach((r, idx) => {
-        relatorio += `${idx + 1}. *${r.reuniao?.dataTexto}*\n   📍 Local: ${r.reuniao?.local}\n`;
-        if (r.reuniao?.responsavel) {
-          relatorio += `   👤 Resp: ${r.reuniao.responsavel}\n`;
-        }
-      });
-      relatorio += `\n`;
-    }
-
-    const gerais = avisosDaSessao.filter((a) => a.tipo === 'geral');
-    if (gerais.length > 0) {
-      relatorio += `📢 *COMUNICADOS GERAIS:*\n`;
-      gerais.forEach((g, idx) => {
-        relatorio += `${idx + 1}. *${g.geral?.titulo}*${g.geral?.dataEvento ? ` (${g.geral.dataEvento})` : ''}\n`;
-        if (g.geral?.destinatario) {
-          relatorio += `   👥 Público: ${g.geral.destinatario}\n`;
-        }
-        if (g.geral?.descricao) {
-          relatorio += `   ${g.geral.descricao}\n`;
-        }
-      });
-      relatorio += `\n`;
-    }
-
-    relatorio += `_Secretaria IPRA Auriflama_`;
-
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(relatorio);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = relatorio;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch {
-      alert('Não foi possível copiar automaticamente para a área de transferência.');
+      return isoDate;
     }
   };
 
+  const gerarTextoRelatorio = () => {
+    if (!cultoSelecionado) return '';
+
+    let texto = `*RELATÓRIO DE AVISOS — IPRA*\n`;
+    texto += `⛪ *Culto:* ${cultoSelecionado.nomeCulto}\n`;
+    texto += `📅 *Data:* ${formatDataBr(cultoSelecionado.data)}${cultoSelecionado.horarioInicio ? ` às ${cultoSelecionado.horarioInicio}` : ''}\n`;
+    texto += `🎙️ *Dirigente:* ${cultoSelecionado.dirigenteNome}\n`;
+    texto += `━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    if (visitantes.length > 0) {
+      texto += `*VISITANTES (${visitantes.length}):*\n`;
+      visitantes.forEach((v, idx) => {
+        const genero = v.visitante?.genero ? ` (${getVisitanteGeneroLabel(v.visitante.genero)})` : '';
+        const origem = [v.visitante?.cidade, v.visitante?.igreja].filter(Boolean).join(' / ');
+        const acomp = v.visitante?.acompanhante ? ` • Acomp.: ${v.visitante.acompanhante}` : '';
+        const status = v.status === 'anunciado' ? '✅' : '⏳';
+        texto += `${idx + 1}. ${status} ${v.visitante?.nome}${genero}${origem ? ` — ${origem}` : ''}${acomp}\n`;
+      });
+      texto += `\n`;
+    }
+
+    if (oracoes.length > 0) {
+      texto += `*PEDIDOS DE ORAÇÃO (${oracoes.length}):*\n`;
+      oracoes.forEach((o, idx) => {
+        const cat = getCategoriaOracaoLabel(o.oracao?.categoria);
+        const urg = o.oracao?.urgente ? ' [URGENTE]' : '';
+        const status = o.status === 'anunciado' ? '✅' : '⏳';
+        texto += `${idx + 1}. ${status} *${o.oracao?.nomePessoa}* (${cat}${urg})`;
+        if (o.oracao?.motivo) texto += `: ${o.oracao.motivo}`;
+        texto += `\n`;
+      });
+      texto += `\n`;
+    }
+
+    if (reunioes.length > 0) {
+      texto += `*REUNIÕES / AGENDA (${reunioes.length}):*\n`;
+      reunioes.forEach((r, idx) => {
+        const status = r.status === 'anunciado' ? '✅' : '⏳';
+        const nomeGrupo =
+          r.reuniao?.grupo === 'outro' && r.reuniao.grupoNomePersonalizado
+            ? r.reuniao.grupoNomePersonalizado
+            : getGrupoReuniaoLabel(r.reuniao?.grupo);
+        texto += `${idx + 1}. ${status} *${nomeGrupo}* — ${r.reuniao?.dataTexto} às ${r.reuniao?.horario} (${r.reuniao?.local})\n`;
+      });
+      texto += `\n`;
+    }
+
+    if (gerais.length > 0) {
+      texto += `*COMUNICADOS GERAIS (${gerais.length}):*\n`;
+      gerais.forEach((g, idx) => {
+        const status = g.status === 'anunciado' ? '✅' : '⏳';
+        const detalhes = formatGeralDetalhes(g);
+        texto += `${idx + 1}. ${status} *${g.geral?.titulo}*`;
+        if (detalhes) texto += ` — ${detalhes}`;
+        texto += `\n`;
+      });
+      texto += `\n`;
+    }
+
+    texto += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    texto += `Total: ${avisosDoCulto.length} avisos (${avisosDoCulto.filter((a) => a.status === 'anunciado').length} lidos)`;
+
+    return texto;
+  };
+
+  const handleCopiarRelatorio = async () => {
+    const texto = gerarTextoRelatorio();
+    if (!texto) return;
+
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 3000);
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = texto;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 3000);
+    }
+  };
+
+  const handleCompartilhar = async () => {
+    const texto = gerarTextoRelatorio();
+    if (!texto) return;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `Relatório IPRA — ${cultoSelecionado?.nomeCulto || 'Culto'}`,
+          text: texto,
+        });
+        return;
+      } catch {
+        // Fallback silencioso caso o usuário cancele
+      }
+    }
+    handleCopiarRelatorio();
+  };
+
+  const renderAvisoTitulo = (aviso: AvisoItem) => {
+    if (aviso.tipo === 'visitante' && aviso.visitante) {
+      return `${aviso.visitante.nome} • ${getVisitanteGeneroLabel(aviso.visitante.genero)}`;
+    }
+    if (aviso.tipo === 'oracao' && aviso.oracao) {
+      return `${aviso.oracao.nomePessoa} — ${getCategoriaOracaoLabel(aviso.oracao.categoria)}`;
+    }
+    if (aviso.tipo === 'reuniao' && aviso.reuniao) {
+      return aviso.reuniao.grupo === 'outro' && aviso.reuniao.grupoNomePersonalizado
+        ? aviso.reuniao.grupoNomePersonalizado
+        : getGrupoReuniaoLabel(aviso.reuniao.grupo);
+    }
+    return aviso.geral?.titulo || 'Aviso';
+  };
+
+  const renderAvisoSubtitulo = (aviso: AvisoItem) => {
+    if (aviso.tipo === 'visitante' && aviso.visitante) {
+      return [
+        aviso.visitante.cidade,
+        aviso.visitante.igreja,
+        aviso.visitante.acompanhante ? `Acomp.: ${aviso.visitante.acompanhante}` : '',
+        aviso.visitante.observacao,
+      ]
+        .filter(Boolean)
+        .join(' • ');
+    }
+    if (aviso.tipo === 'oracao' && aviso.oracao) {
+      return aviso.oracao.motivo || (aviso.oracao.urgente ? 'Pedido urgente' : '');
+    }
+    if (aviso.tipo === 'reuniao' && aviso.reuniao) {
+      return `${aviso.reuniao.dataTexto} às ${aviso.reuniao.horario} • ${aviso.reuniao.local}`;
+    }
+    return formatGeralDetalhes(aviso);
+  };
+
+  const resumoChips = [
+    {
+      label: 'Visitantes',
+      count: visitantes.length,
+      icon: UserPlus,
+      iconClass: 'text-[#03589E] dark:text-[#93C5FD] bg-[#E8F2FC] dark:bg-[#0D2748]',
+    },
+    {
+      label: 'Orações',
+      count: oracoes.length,
+      icon: HeartHandshake,
+      iconClass: 'text-[#C2410C] dark:text-orange-300 bg-orange-100 dark:bg-orange-950/60',
+    },
+    {
+      label: 'Reuniões',
+      count: reunioes.length,
+      icon: Calendar,
+      iconClass: 'text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/60',
+    },
+    {
+      label: 'Avisos',
+      count: gerais.length,
+      icon: Megaphone,
+      iconClass: 'text-[#062552] dark:text-sky-200 bg-[#E8F2FC] dark:bg-[#1C3559]',
+    },
+  ];
+
   return (
-    <div className="w-full max-w-2xl mx-auto px-3 py-3 space-y-3.5 overflow-x-hidden">
-      
-      {/* ── SELETOR DE CULTO / SESSÃO DO HISTÓRICO ── */}
-      <div className="bg-[#0f1117] border border-zinc-800 rounded-2xl p-3.5 sm:p-4 shadow-sm space-y-3">
-        
-        {/* Barra superior de seleção da sessão */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-zinc-850">
-          <div className="flex items-center gap-2">
-            <Archive className="w-4 h-4 text-amber-400 shrink-0" />
-            <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">
-              Sessão / Culto do Histórico:
-            </span>
-          </div>
-
-          {historicoCultos.length > 0 ? (
-            <select
-              value={idSessaoEfetiva}
-              onChange={(e) => setCultoSelecionadoId(e.target.value)}
-              className="bg-zinc-900 border border-zinc-700 text-white text-xs font-bold px-3 py-2 rounded-xl focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
-            >
-              {historicoCultos.map((culto) => {
-                const isCurrent = culto.id === cultoAtivo?.id && culto.status === 'em_andamento';
-                return (
-                  <option key={culto.id} value={culto.id}>
-                    {isCurrent ? '🟢 [AO VIVO] ' : '🏛️ '}
-                    {culto.nomeCulto} ({culto.data || 'Data N/D'})
-                  </option>
-                );
-              })}
-            </select>
-          ) : (
-            <span className="text-xs text-zinc-500 italic">Culto único atual</span>
-          )}
-        </div>
-
-        {/* Informações detalhadas da sessão selecionada */}
-        {sessaoSelecionada ? (
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm sm:text-base font-black text-white leading-tight">
-                  {sessaoSelecionada.nomeCulto}
-                </h2>
-                {sessaoSelecionada.status === 'em_andamento' ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 border border-emerald-700 text-emerald-300">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    Em andamento
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-800 border border-zinc-700 text-zinc-400">
-                    Encerrado
-                  </span>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5 text-zinc-500" />
-                  <span>{dataSessaoFormatada}</span>
-                </span>
-                {sessaoSelecionada.horarioInicio && (
-                  <>
-                    <span className="text-zinc-600">•</span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-zinc-500" />
-                      <span>Início às {sessaoSelecionada.horarioInicio}</span>
-                    </span>
-                  </>
-                )}
-                {sessaoSelecionada.dirigenteNome && (
-                  <>
-                    <span className="text-zinc-600">•</span>
-                    <span className="flex items-center gap-1">
-                      <UserCheck className="w-3.5 h-3.5 text-zinc-500" />
-                      <span className="text-zinc-300 font-semibold">{sessaoSelecionada.dirigenteNome}</span>
-                    </span>
-                  </>
-                )}
-              </div>
+    <div className="space-y-3.5 pb-6">
+      {/* Cabeçalho + Seletor de Culto (enxuto e sem corte de texto) */}
+      <section className="bg-white dark:bg-[#081529] rounded-3xl border border-[#D5E2F0] dark:border-[#1C3559] p-4 shadow-card space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-[#E8F2FC] dark:bg-[#0D1E38] text-[#03589E] dark:text-[#60A5FA] shrink-0">
+              <History className="w-5 h-5" />
             </div>
+            <h2 className="text-lg font-extrabold text-[#062552] dark:text-white leading-tight truncate">
+              Histórico
+            </h2>
+          </div>
 
-            {/* Botão Copiar Relatório da Sessão */}
-            <button
-              type="button"
-              onClick={handleCopiarRelatorio}
-              disabled={avisosDaSessao.length === 0}
-              className="w-full sm:w-auto px-3.5 py-2.5 rounded-xl bg-white hover:bg-slate-100 active:scale-95 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed touch-target shrink-0"
-            >
-              {copied ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Relatório Copiado!</span>
-                </>
-              ) : (
-                <>
-                  <Share2 className="w-3.5 h-3.5 text-slate-700" />
-                  <span>Copiar Relatório</span>
-                </>
-              )}
-            </button>
-          </div>
-        ) : (
-          <div className="text-xs text-zinc-400 py-2 italic text-center">
-            Nenhuma sessão de culto selecionada.
-          </div>
-        )}
-
-        {/* 4 Métricas Sóbrias estritamente da Sessão Selecionada */}
-        <div className="grid grid-cols-4 gap-2 pt-2 border-t border-zinc-850">
-          <div className="bg-black/60 border border-zinc-800/80 p-2 sm:p-2.5 rounded-xl text-center shadow-inner">
-            <div className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-indigo-400">
-              Visitantes
-            </div>
-            <div className="text-xl sm:text-2xl font-black text-white mt-0.5">{stats.visitantes}</div>
-          </div>
-          <div className="bg-black/60 border border-zinc-800/80 p-2 sm:p-2.5 rounded-xl text-center shadow-inner">
-            <div className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-amber-400">
-              Orações
-            </div>
-            <div className="text-xl sm:text-2xl font-black text-amber-300 mt-0.5">{stats.oracoes}</div>
-          </div>
-          <div className="bg-black/60 border border-zinc-800/80 p-2 sm:p-2.5 rounded-xl text-center shadow-inner">
-            <div className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-teal-400">
-              Reuniões
-            </div>
-            <div className="text-xl sm:text-2xl font-black text-teal-300 mt-0.5">{stats.reunioes}</div>
-          </div>
-          <div className="bg-black/60 border border-zinc-800/80 p-2 sm:p-2.5 rounded-xl text-center shadow-inner">
-            <div className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-blue-400">
-              Gerais
-            </div>
-            <div className="text-xl sm:text-2xl font-black text-blue-300 mt-0.5">{stats.gerais}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── BARRA DE BUSCA E FILTROS ── */}
-      <div className="space-y-2.5">
-        <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por visitante, motivo, local ou autor..."
-            className="w-full pl-10 pr-9 py-3 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm sm:text-base placeholder:text-slate-400 focus:outline-none focus:border-amber-500 dark:focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 shadow-xs transition-all"
-          />
-          {searchTerm && (
-            <button
-              type="button"
-              onClick={() => setSearchTerm('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-white p-1"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-
-        {/* Filtros de Status (Todos / Anunciados / Pendentes) */}
-        <div className="flex items-center gap-1.5 no-swipe" data-no-swipe="true">
-          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mr-1">Status:</span>
-          {[
-            { id: 'todos' as const, label: `Todos (${stats.total})` },
-            { id: 'anunciado' as const, label: `Anunciados (${stats.anunciados})` },
-            { id: 'pendente' as const, label: `Pendentes (${stats.pendentes})` },
-          ].map((st) => (
-            <button
-              key={st.id}
-              type="button"
-              onClick={() => setStatusFiltro(st.id)}
-              className={`px-3 py-1 rounded-xl text-xs font-bold border transition-all ${
-                statusFiltro === st.id
-                  ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-950 border-slate-900 dark:border-white shadow-xs'
-                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
-              }`}
-            >
-              {st.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Chips de Filtro por Categoria / Tipo */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs w-full max-w-full no-swipe" data-no-swipe="true">
-          {[
-            { id: 'todos', label: 'Todas Categorias' },
-            { id: 'visitante', label: 'Visitantes' },
-            { id: 'oracao', label: 'Pedidos de Oração' },
-            { id: 'reuniao', label: 'Reuniões' },
-            { id: 'geral', label: 'Comunicados' },
-          ].map((f) => {
-            const isSelected = selectedTipo === f.id;
-            return (
+          {cultoSelecionado && (
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
-                key={f.id}
                 type="button"
-                onClick={() => setSelectedTipo(f.id as any)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 border transition-all truncate touch-target ${
-                  isSelected
-                    ? 'bg-amber-500/15 border-amber-500 text-amber-800 dark:text-amber-300 ring-1 ring-amber-500/30'
-                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                onClick={handleCopiarRelatorio}
+                className={`px-3 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 min-h-[40px] ${
+                  copiado
+                    ? 'bg-emerald-700 text-white'
+                    : 'bg-[#03589E] hover:bg-[#062552] text-white'
                 }`}
               >
-                {f.label}
+                {copiado ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Copy className="w-3.5 h-3.5 shrink-0" />}
+                <span>{copiado ? 'Copiado' : 'Copiar'}</span>
               </button>
-            );
-          })}
+
+              {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+                <button
+                  type="button"
+                  onClick={handleCompartilhar}
+                  aria-label="Compartilhar relatório"
+                  className="p-2.5 rounded-xl bg-[#F4F7FB] dark:bg-[#040B16] border border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-white hover:border-[#03589E] min-h-[40px] min-w-[40px] flex items-center justify-center"
+                >
+                  <Share2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
-      </div>
 
-      {/* ── LISTAGEM DE REGISTROS DA SESSÃO ── */}
-      {avisosFiltrados.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-8 text-center text-slate-500 dark:text-slate-400 space-y-2 shadow-xs">
-          <Search className="w-8 h-8 mx-auto text-slate-400 opacity-60" />
-          <div className="font-bold text-sm text-slate-800 dark:text-slate-200">
-            {avisosDaSessao.length === 0
-              ? 'Nenhum registro transmitido neste culto'
-              : 'Nenhum registro encontrado com estes filtros'}
-          </div>
-          <p className="text-xs text-slate-400">
-            {avisosDaSessao.length === 0
-              ? 'Os avisos transmitidos para este culto aparecerão catalogados aqui.'
-              : 'Tente outro termo de busca ou altere os filtros de status e categoria.'}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {avisosFiltrados.map((aviso) => {
-            const isAnunciado = aviso.status === 'anunciado';
-            const borderAccent = 
-              aviso.tipo === 'visitante' ? 'border-l-indigo-500' :
-              aviso.tipo === 'oracao' ? 'border-l-amber-500' :
-              aviso.tipo === 'reuniao' ? 'border-l-teal-500' :
-              'border-l-blue-500';
-
-            const badgeBg = 
-              aviso.tipo === 'visitante' ? 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800' :
-              aviso.tipo === 'oracao' ? 'bg-amber-50 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800' :
-              aviso.tipo === 'reuniao' ? 'bg-teal-50 dark:bg-teal-950/80 text-teal-800 dark:text-teal-300 border-teal-200 dark:border-teal-800' :
-              'bg-blue-50 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800';
-
-            return (
-              <div
-                key={aviso.id}
-                className={`bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 border-l-4 ${borderAccent} rounded-2xl p-4 shadow-xs space-y-2.5 overflow-hidden transition-surface`}
-              >
-                <div className="flex items-center justify-between text-xs text-slate-400">
-                  <div className="flex items-center gap-2">
-                    <span className={`font-bold uppercase tracking-wider text-[10px] px-2.5 py-0.5 rounded-full border ${badgeBg}`}>
-                      {getTipoAvisoLabel(aviso.tipo)}
-                    </span>
-                    {isAnunciado ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle2 className="w-3 h-3" /> Lida
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                        <AlertCircle className="w-3 h-3" /> Pendente
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
-                    <Clock className="w-3.5 h-3.5 text-slate-400" />
-                    <span className="font-bold text-slate-700 dark:text-slate-300">{formatHora(aviso.criadoEm)}</span>
-                    <span className="text-slate-300 dark:text-slate-600">•</span>
-                    <span className="text-slate-600 dark:text-slate-300">{aviso.autorNome.split(' ')[0]}</span>
-                  </div>
-                </div>
-
-                {/* Detalhes com quebra segura de texto */}
-                {aviso.tipo === 'visitante' && aviso.visitante && (
-                  <div className="space-y-1">
-                    <div className="font-black text-sm sm:text-base text-slate-900 dark:text-white break-words">
-                      {aviso.visitante.nome}
-                    </div>
-                    {[aviso.visitante.cidade, aviso.visitante.igreja].filter(Boolean).length > 0 && (
-                      <div className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 break-words font-medium">
-                        {[aviso.visitante.cidade, aviso.visitante.igreja].filter(Boolean).join(' • ')}
-                      </div>
-                    )}
-                    {aviso.visitante.observacao && (
-                      <div className="text-xs text-slate-600 dark:text-slate-300 italic mt-1 break-words bg-slate-50 dark:bg-slate-950/60 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                        Nota: {aviso.visitante.observacao}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {aviso.tipo === 'oracao' && aviso.oracao && (
-                  <div className="space-y-1">
-                    <div className="font-black text-sm sm:text-base text-slate-900 dark:text-white break-words">
-                      {aviso.oracao.nomePessoa}
-                    </div>
-                    {aviso.oracao.motivo && (
-                      <div className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 break-words bg-amber-50/70 dark:bg-amber-950/40 p-2.5 rounded-xl border border-amber-200/70 dark:border-amber-800/60 leading-relaxed italic">
-                        "{aviso.oracao.motivo}"
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {aviso.tipo === 'reuniao' && aviso.reuniao && (
-                  <div className="space-y-1">
-                    <div className="font-black text-sm sm:text-base text-slate-900 dark:text-white break-words">
-                      {aviso.reuniao.dataTexto}
-                    </div>
-                    <div className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 break-words font-medium">
-                      Local: {aviso.reuniao.local}
-                    </div>
-                    {aviso.reuniao.responsavel && (
-                      <div className="text-xs text-slate-500 dark:text-slate-400">
-                        Responsável: {aviso.reuniao.responsavel}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {aviso.tipo === 'geral' && aviso.geral && (
-                  <div className="space-y-1">
-                    <div className="font-black text-sm sm:text-base text-slate-900 dark:text-white break-words">
-                      {aviso.geral.titulo}
-                    </div>
-                    {aviso.geral.destinatario && (
-                      <div className="text-xs font-bold text-blue-600 dark:text-blue-400">
-                        Público: {aviso.geral.destinatario}
-                      </div>
-                    )}
-                    {aviso.geral.descricao && (
-                      <div className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 break-words leading-relaxed mt-1">
-                        {aviso.geral.descricao}
-                      </div>
-                    )}
-                    {aviso.geral.dataEvento && (
-                      <div className="text-xs text-slate-500 dark:text-slate-400">
-                        Quando: {aviso.geral.dataEvento}
-                      </div>
-                    )}
-                  </div>
-                )}
+        {/* Botão Seletor Material Design 3 */}
+        {todosCultos.length > 0 && cultoSelecionado ? (
+          <button
+            type="button"
+            onClick={() => setShowCultoPicker(true)}
+            aria-haspopup="dialog"
+            aria-expanded={showCultoPicker}
+            className="w-full text-left p-3.5 rounded-2xl border-2 border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16] hover:border-[#03589E] active:scale-[0.99] transition-all flex items-center justify-between gap-3"
+          >
+            <div className="min-w-0 space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-extrabold uppercase ${
+                    cultoSelecionado.status === 'em_andamento'
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300'
+                      : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                  }`}
+                >
+                  {cultoSelecionado.status === 'em_andamento' ? 'Ao Vivo' : 'Encerrado'}
+                </span>
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                  {formatDataBr(cultoSelecionado.data)}
+                  {cultoSelecionado.horarioInicio ? ` • ${cultoSelecionado.horarioInicio}` : ''}
+                </span>
               </div>
-            );
-          })}
+
+              <p className="text-base font-extrabold text-[#062552] dark:text-white leading-snug">
+                {cultoSelecionado.nomeCulto}
+              </p>
+
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                Dirigente: <strong className="text-[#062552] dark:text-white">{cultoSelecionado.dirigenteNome}</strong>
+              </p>
+            </div>
+
+            <div className="w-9 h-9 rounded-xl bg-white dark:bg-[#081529] border border-[#D5E2F0] dark:border-[#1C3559] flex items-center justify-center shrink-0 text-[#03589E] dark:text-[#60A5FA]">
+              <ChevronDown className="w-5 h-5" />
+            </div>
+          </button>
+        ) : (
+          <div className="text-center py-6 bg-[#F4F7FB] dark:bg-[#040B16] rounded-2xl border border-[#D5E2F0] dark:border-[#1C3559]">
+            <Church className="w-8 h-8 text-slate-400 mx-auto mb-1.5" />
+            <p className="text-sm font-bold text-[#062552] dark:text-slate-200">
+              Nenhum culto registrado ainda.
+            </p>
+          </div>
+        )}
+      </section>
+
+      {/* Resumo Numérico Compacto (2x2 em 1 linha por item) */}
+      {cultoSelecionado && (
+        <>
+          <section className="grid grid-cols-2 gap-2">
+            {resumoChips.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.label}
+                  className="bg-white dark:bg-[#081529] px-3 py-2.5 rounded-2xl border border-[#D5E2F0] dark:border-[#1C3559] flex items-center justify-between gap-2"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className={`p-1.5 rounded-lg shrink-0 ${item.iconClass}`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate">
+                      {item.label}
+                    </span>
+                  </div>
+                  <span className="text-base font-black text-[#062552] dark:text-white shrink-0">
+                    {item.count}
+                  </span>
+                </div>
+              );
+            })}
+          </section>
+
+          {/* Filtros de Status */}
+          <div className="grid grid-cols-3 gap-1.5">
+            {[
+              { id: 'todos', label: `Todos (${avisosDoCulto.length})` },
+              {
+                id: 'anunciado',
+                label: `Lidos (${avisosDoCulto.filter((a) => a.status === 'anunciado').length})`,
+              },
+              {
+                id: 'pendente',
+                label: `Faltam (${avisosDoCulto.filter((a) => a.status === 'pendente').length})`,
+              },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setFiltroStatus(tab.id as typeof filtroStatus)}
+                className={`py-2.5 px-2 rounded-2xl text-xs sm:text-sm font-extrabold border-2 transition-all min-h-[44px] whitespace-nowrap ${
+                  filtroStatus === tab.id
+                    ? 'bg-[#03589E] border-[#03589E] text-white shadow-sm'
+                    : 'bg-white dark:bg-[#081529] border-[#D5E2F0] dark:border-[#1C3559] text-[#062552] dark:text-slate-300'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Lista de Avisos */}
+          {avisosFiltrados.length === 0 ? (
+            <div className="bg-white dark:bg-[#081529] rounded-2xl border border-[#D5E2F0] dark:border-[#1C3559] p-6 text-center text-sm font-bold text-slate-500 dark:text-slate-400">
+              Nenhum aviso neste filtro.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {avisosFiltrados.map((aviso) => {
+                const subtitulo = renderAvisoSubtitulo(aviso);
+                const visual = getAvisoVisual(aviso);
+                const VisualIcon = visual.icon;
+                return (
+                  <div
+                    key={aviso.id}
+                    className={`rounded-2xl border-2 overflow-hidden shadow-subtle ${visual.cardBg} ${visual.cardBorder}`}
+                  >
+                    <div className={`px-4 py-2 flex items-center justify-between gap-2 ${visual.headerBg}`}>
+                      <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-white">
+                        <VisualIcon className="w-4 h-4 shrink-0" />
+                        <span>{visual.label}</span>
+                      </span>
+                      <div className="flex items-center gap-2 text-xs font-bold text-white/95">
+                        {aviso.status === 'anunciado' ? (
+                          <span className="inline-flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Lido
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" />
+                            Pendente
+                          </span>
+                        )}
+                        <span className="opacity-75">•</span>
+                        <span>{formatHora(aviso.criadoEm)}</span>
+                      </div>
+                    </div>
+
+                    <div className="p-4">
+                      <h4 className="font-extrabold text-base text-[#062552] dark:text-white leading-snug">
+                        {renderAvisoTitulo(aviso)}
+                      </h4>
+                      {subtitulo && (
+                        <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">{subtitulo}</p>
+                      )}
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                        Enviado por {aviso.autorNome}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Modal Customizado de Seleção de Culto (substitui o select nativo) */}
+      {showCultoPicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="culto-picker-title"
+          onClick={() => setShowCultoPicker(false)}
+        >
+          <div
+            className="w-full max-w-md bg-white dark:bg-[#081529] rounded-3xl border border-[#D5E2F0] dark:border-[#1C3559] shadow-2xl overflow-hidden max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-[#062552] text-white px-5 py-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <Church className="w-5 h-5 text-[#FBB016] shrink-0" />
+                <h3 id="culto-picker-title" className="text-base font-extrabold">
+                  Escolher Culto
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCultoPicker(false)}
+                aria-label="Fechar seleção de culto"
+                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3.5 space-y-2.5 overflow-y-auto">
+              {todosCultos.map((c) => {
+                const selected = c.id === effectiveSelectedId;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setCultoSelecionadoId(c.id);
+                      setShowCultoPicker(false);
+                    }}
+                    className={`w-full text-left p-3.5 rounded-2xl border-2 transition-all flex items-center justify-between gap-3 ${
+                      selected
+                        ? 'border-[#03589E] bg-[#E8F2FC] dark:bg-[#0D2748]'
+                        : 'border-[#D5E2F0] dark:border-[#1C3559] bg-[#F4F7FB] dark:bg-[#040B16]'
+                    }`}
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-[11px] font-extrabold uppercase ${
+                            c.status === 'em_andamento'
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300'
+                              : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                          }`}
+                        >
+                          {c.status === 'em_andamento' ? 'Ao Vivo' : 'Encerrado'}
+                        </span>
+                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                          {formatDataBr(c.data)}
+                          {c.horarioInicio ? ` • ${c.horarioInicio}` : ''}
+                        </span>
+                      </div>
+                      <p className="text-sm sm:text-base font-extrabold text-[#062552] dark:text-white leading-snug">
+                        {c.nomeCulto}
+                      </p>
+                      <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                        Dirigente: {c.dirigenteNome}
+                      </p>
+                    </div>
+
+                    <div
+                      className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        selected
+                          ? 'bg-[#03589E] border-[#03589E] text-white'
+                          : 'border-slate-300 dark:border-slate-600'
+                      }`}
+                    >
+                      {selected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
     </div>
