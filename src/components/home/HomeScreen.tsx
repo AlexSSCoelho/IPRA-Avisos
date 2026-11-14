@@ -33,6 +33,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const { cultoAtivo, isDirigente, dirigenteAtualNome, finalizarCulto } = useCulto();
   const {
     avisosPendentes,
+    isCultoEmAndamento,
     totalVisitantes,
     totalOracoes,
     totalReunioes,
@@ -126,7 +127,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       </section>
 
       {/* Card do Culto Atual */}
-      {cultoAtivo ? (
+      {isCultoEmAndamento && cultoAtivo ? (
         <section className="bg-white dark:bg-[#081529] rounded-3xl border border-[#D5E2F0] dark:border-[#1C3559] p-4 shadow-card space-y-4">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -276,7 +277,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <ArrowRight className="w-4 h-4 text-slate-400 shrink-0" />
         </button>
 
-        {cultoAtivo && canManageCulto && (
+        {isCultoEmAndamento && cultoAtivo && canManageCulto && (
           <button
             type="button"
             onClick={() => setConfirmEndCulto(true)}

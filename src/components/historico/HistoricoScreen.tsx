@@ -25,6 +25,18 @@ import {
 } from 'lucide-react';
 import type { AvisoItem, CultoAtivo } from '../../types';
 
+/** Formata descrição, data e destinatário de um comunicado geral para exibição e relatório. */
+function formatGeralDetalhes(aviso: AvisoItem): string {
+  if (!aviso.geral) return '';
+  return [
+    aviso.geral.descricao,
+    aviso.geral.dataEvento ? `Quando: ${aviso.geral.dataEvento}` : '',
+    aviso.geral.destinatario ? `Para: ${aviso.geral.destinatario}` : '',
+  ]
+    .filter(Boolean)
+    .join(' • ');
+}
+
 export const HistoricoScreen: React.FC = () => {
   const { avisos } = useAvisos();
   const { cultoAtivo, historicoCultos } = useCulto();
@@ -133,8 +145,9 @@ export const HistoricoScreen: React.FC = () => {
       texto += `*COMUNICADOS GERAIS (${gerais.length}):*\n`;
       gerais.forEach((g, idx) => {
         const status = g.status === 'anunciado' ? '✅' : '⏳';
+        const detalhes = formatGeralDetalhes(g);
         texto += `${idx + 1}. ${status} *${g.geral?.titulo}*`;
-        if (g.geral?.descricao) texto += ` — ${g.geral.descricao}`;
+        if (detalhes) texto += ` — ${detalhes}`;
         texto += `\n`;
       });
       texto += `\n`;
@@ -215,7 +228,7 @@ export const HistoricoScreen: React.FC = () => {
     if (aviso.tipo === 'reuniao' && aviso.reuniao) {
       return `${aviso.reuniao.dataTexto} às ${aviso.reuniao.horario} • ${aviso.reuniao.local}`;
     }
-    return aviso.geral?.descricao || aviso.geral?.dataEvento || '';
+    return formatGeralDetalhes(aviso);
   };
 
   const resumoChips = [

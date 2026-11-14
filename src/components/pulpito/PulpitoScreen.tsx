@@ -57,6 +57,7 @@ export const PulpitoScreen: React.FC = () => {
     fontScale,
     setFontScale,
     modoFocadoPulpito,
+    setModoFocadoPulpito,
     toggleModoFocadoPulpito,
     soundEnabled,
   } = useAccessibility();
@@ -113,6 +114,13 @@ export const PulpitoScreen: React.FC = () => {
     }
   };
 
+  // Sai automaticamente do modo focado caso o culto seja encerrado
+  useEffect(() => {
+    if (!isCultoEmAndamento && modoFocadoPulpito) {
+      setModoFocadoPulpito(false);
+    }
+  }, [isCultoEmAndamento, modoFocadoPulpito, setModoFocadoPulpito]);
+
   if (!isCultoEmAndamento) {
     return (
       <div className="space-y-4">
@@ -126,6 +134,16 @@ export const PulpitoScreen: React.FC = () => {
           <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
             Abra um culto na tela inicial para acompanhar os avisos.
           </p>
+          {modoFocadoPulpito && (
+            <button
+              type="button"
+              onClick={() => setModoFocadoPulpito(false)}
+              className="mt-5 px-4 py-2.5 rounded-2xl bg-[#E85D04] text-white text-sm font-bold inline-flex items-center gap-2"
+            >
+              <Minimize2 className="w-4 h-4" />
+              <span>Sair do Modo Focado</span>
+            </button>
+          )}
         </div>
       </div>
     );
